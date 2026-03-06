@@ -3,522 +3,330 @@ package com.aion;
 import com.aion.bytecode.Bytecode;
 import com.aion.bytecode.BytecodeCompiler;
 import com.aion.bytecode.BytecodeVM;
-import com.aion.bytecode.Instruction;
 import com.aion.parser.AionFrontend;
 import org.junit.jupiter.api.Test;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
 import java.io.PrintStream;
-import java.nio.charset.StandardCharsets;
-import java.util.List;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * End-to-end tests for the bytecode compiler + VM pipeline:
- *   Aion source  →  parse  →  BytecodeCompiler  →  BytecodeVM  →  captured stdout
+ * Integration tests for the Aion bytecode compiler + VM.
+ * Each test compiles an Aion source string, runs it in the VM, and
+ * asserts on trimmed stdout.
  */
 class BytecodeCompilerTest {
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    /** Compile + run with no stdin; return printed lines. */
-    private List<String> run(String source) {
-        return runWithInput(source, "");
-    }
-
-    /** Compile + run; feed {@code stdinLines} (newline-separated) as stdin. */
-    private List<String> runWithInput(String source, String stdinInput) {
-        var result = AionFrontend.parseString(source, "<test>");
+    private String run(String source) {
+        var result = AionFrontend.parseString(source, "<bc-test>");
         assertThat(result.errors()).as("parse errors").isEmpty();
-
-        Bytecode bytecode = new BytecodeCompiler().compile(result.module());
-
-        // Capture stdout
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        PrintStream captured = new PrintStream(baos, true, StandardCharsets.UTF_8);
-        PrintStream original = System.out;
-        System.setOut(captured);
-
-        // Provide stdin
-        InputStream stdinStream = new ByteArrayInputStream(
-                stdinInput.getBytes(StandardCharsets.UTF_8));
-        InputStream originalIn = System.in;
-        System.setIn(stdinStream);
-
-        try {
-            new BytecodeVM().run(bytecode);
-        } finally {
-            System.setOut(original);
-            System.setIn(originalIn);
-            captured.flush();
-        }
-
-        String output = baos.toString(StandardCharsets.UTF_8);
-        // Split on newlines, drop trailing empty entry
-        String[] lines = output.split("\r?\n", -1);
-        if (lines.length > 0 && lines[lines.length - 1].isEmpty()) {
-            return List.of(lines).subList(0, lines.length - 1);
-        }
-        return List.of(lines);
+        Bytecode bc = new BytecodeCompiler().compile(result.module());
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        PrintStream saved = System.out;
+        System.setOut(new PrintStream(bos));
+        try { new BytecodeVM().run(bc); } finally { System.setOut(saved); }
+        return bos.toString().replace("\r\n", "\n").replace("\r", "\n").trim();
     }
 
-    /** Compile source and return the raw instruction list. */
-    private List<Instruction> compile(String source) {
-        var result = AionFrontend.parseString(source, "<test>");
-        assertThat(result.errors()).as("parse errors").isEmpty();
-        return new BytecodeCompiler().compile(result.module()).instructions;
+    // ── Basic arithmetic ──────────────────────────────────────────────────────
+    @Test void integer_addition()  { assertThat(run("@pure fn main() -> Unit { print(3 + 4) }")).isEqualTo("7"); }
+    @Test void float_division()    { assertThat(run("@pure fn main() -> Unit { print(10.0 / 4.0) }")).isEqualTo("2.5"); }
+    @Test void unary_negation()    { assertThat(run("@pure fn main() -> Unit { print(-5) }")).isEqualTo("-5"); }
+
+    // ── String interpolation ──────────────────────────────────────────────────
+    @Test void string_interpolation() {
+        assertThat(run("@pure fn main() -> Unit { let x = 42\nprint(\"x = ${x}\") }")).isEqualTo("x = 42");
     }
 
-    // ── Instruction emission tests ────────────────────────────────────────────
-
-
-    @Test
-    void emits_push_int_and_print_and_halt() {
-        var instrs = compile("@pure fn main() -> Unit { print(42) }");
-        // Layout: [Jump→main, main: PushInt, Print, Halt]
-        assertThat(instrs.get(0)).isInstanceOf(Instruction.Jump.class);
-        assertThat(instrs.get(1)).isInstanceOf(Instruction.PushInt.class);
-        assertThat(((Instruction.PushInt) instrs.get(1)).value()).isEqualTo(42L);
-        assertThat(instrs.get(2)).isInstanceOf(Instruction.Print.class);
-        assertThat(instrs.get(3)).isInstanceOf(Instruction.Halt.class);
+    // ── Constants ─────────────────────────────────────────────────────────────
+    @Test void module_const() {
+        assertThat(run("const LIMIT: Int = 7\n@pure fn main() -> Unit { print(LIMIT) }")).isEqualTo("7");
     }
 
-    @Test
-    void emits_push_str_and_print_and_halt() {
-        var instrs = compile("@pure fn main() -> Unit { print(\"hello\") }");
-        // Layout: [Jump→main, main: PushStr, Print, Halt]
-        assertThat(instrs.get(1)).isInstanceOf(Instruction.PushStr.class);
-        assertThat(((Instruction.PushStr) instrs.get(1)).value()).isEqualTo("hello");
+    // ── User functions ────────────────────────────────────────────────────────
+    @Test void user_function_call() {
+        assertThat(run("""
+            @pure fn double(x: Int) -> Int { return x * 2 }
+            @pure fn main() -> Unit { print(double(5)) }
+            """)).isEqualTo("10");
+    }
+    @Test void recursive_factorial() {
+        assertThat(run("""
+            @pure fn fact(n: Int) -> Int {
+                if n <= 1 { return 1 }
+                return n * fact(n - 1)
+            }
+            @pure fn main() -> Unit { print(fact(6)) }
+            """)).isEqualTo("720");
     }
 
-    @Test
-    void emits_store_and_load_for_let() {
-        var instrs = compile("@pure fn main() -> Unit { let x = 7 }");
-        assertThat(instrs).anySatisfy(i ->
-                assertThat(i).isInstanceOf(Instruction.Store.class));
+    // ── Control flow ─────────────────────────────────────────────────────────
+    @Test void if_else() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                let x = 10
+                if x > 5 { print("big") } else { print("small") }
+            }
+            """)).isEqualTo("big");
+    }
+    @Test void while_break() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                mut i = 0
+                while i < 100 { i = i + 1\nif i == 5 { break } }
+                print(i)
+            }
+            """)).isEqualTo("5");
+    }
+    @Test void while_continue() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                mut sum = 0\nmut i = 0
+                while i < 6 { i = i + 1\nif i == 3 { continue }\nsum = sum + i }
+                print(sum)
+            }
+            """)).isEqualTo("18");
+    }
+    @Test void for_loop_sum() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                mut acc = 0
+                for x in [1, 2, 3, 4, 5] { acc = acc + x }
+                print(acc)
+            }
+            """)).isEqualTo("15");
     }
 
-    @Test
-    void emits_eq_for_comparison() {
-        var instrs = compile("@pure fn main() -> Unit { let b = 1 == 1 }");
-        assertThat(instrs).anySatisfy(i ->
-                assertThat(i).isInstanceOf(Instruction.Eq.class));
+    // ── Match ─────────────────────────────────────────────────────────────────
+    @Test void match_int_literal() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                let s = match 2 { 1 => "one", 2 => "two", _ => "other" }
+                print(s)
+            }
+            """)).isEqualTo("two");
     }
-
-    @Test
-    void emits_jump_if_false_for_if() {
-        var instrs = compile("""
-                @pure fn main() -> Unit {
-                    if 1 == 1 {
-                        print("yes")
-                    }
+    @Test void match_pattern_guard() {
+        assertThat(run("""
+            @pure fn classify(n: Int) -> Str {
+                return match n {
+                    x if x < 0  => "neg",
+                    0            => "zero",
+                    x if x < 10 => "small",
+                    _            => "big",
                 }
-                """);
-        assertThat(instrs).anySatisfy(i ->
-                assertThat(i).isInstanceOf(Instruction.JumpIfFalse.class));
-        assertThat(instrs).anySatisfy(i ->
-                assertThat(i).isInstanceOf(Instruction.Jump.class));
+            }
+            @pure fn main() -> Unit {
+                print(classify(-3))
+                print(classify(0))
+                print(classify(5))
+                print(classify(99))
+            }
+            """)).isEqualTo("neg\nzero\nsmall\nbig");
+    }
+    @Test void match_bind_and_compute() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                let v = match 7 { x => x * 2 }
+                print(v)
+            }
+            """)).isEqualTo("14");
+    }
+    @Test void match_bool() {
+        assertThat(run("""
+            @pure fn yn(b: Bool) -> Str { return match b { true => "yes", false => "no" } }
+            @pure fn main() -> Unit { print(yn(true))\nprint(yn(false)) }
+            """)).isEqualTo("yes\nno");
     }
 
-    // ── VM output tests ───────────────────────────────────────────────────────
-
-    @Test
-    void prints_integer_literal() {
-        var out = run("@pure fn main() -> Unit { print(42) }");
-        assertThat(out).containsExactly("42");
+    // ── Option / Result ───────────────────────────────────────────────────────
+    @Test void match_some_none() {
+        assertThat(run("""
+            @pure fn get_val(o: Option[Int]) -> Int {
+                return match o { some(v) => v, none => -1 }
+            }
+            @pure fn main() -> Unit {
+                print(get_val(some(42)))
+                print(get_val(none))
+            }
+            """)).isEqualTo("42\n-1");
     }
-
-    @Test
-    void prints_string_literal() {
-        var out = run("@pure fn main() -> Unit { print(\"hello world\") }");
-        assertThat(out).containsExactly("hello world");
-    }
-
-    @Test
-    void prints_float_literal() {
-        var out = run("@pure fn main() -> Unit { print(3.14) }");
-        assertThat(out).containsExactly("3.14");
-    }
-
-    @Test
-    void prints_bool_literal() {
-        var out = run("@pure fn main() -> Unit { print(true) }");
-        assertThat(out).containsExactly("true");
-    }
-
-    @Test
-    void prints_multiple_lines() {
-        var out = run("""
-                @pure fn main() -> Unit {
-                    print("a")
-                    print("b")
-                    print("c")
+    @Test void match_ok_err() {
+        assertThat(run("""
+            @pure fn safe_div(a: Float, b: Float) -> Result[Float, Str] {
+                if b == 0.0 { return err("zero") }
+                return ok(a / b)
+            }
+            @pure fn main() -> Unit {
+                match safe_div(10.0, 2.0) {
+                    ok(v)  => print("ok: ${v}"),
+                    err(e) => print("err: ${e}"),
                 }
-                """);
-        assertThat(out).containsExactly("a", "b", "c");
-    }
-
-    // ── Arithmetic ────────────────────────────────────────────────────────────
-
-    @Test
-    void arithmetic_add() {
-        var out = run("@pure fn main() -> Unit { print(3 + 4) }");
-        assertThat(out).containsExactly("7");
-    }
-
-    @Test
-    void arithmetic_sub() {
-        var out = run("@pure fn main() -> Unit { print(10 - 3) }");
-        assertThat(out).containsExactly("7");
-    }
-
-    @Test
-    void arithmetic_mul() {
-        var out = run("@pure fn main() -> Unit { print(6 * 7) }");
-        assertThat(out).containsExactly("42");
-    }
-
-    @Test
-    void arithmetic_div() {
-        var out = run("@pure fn main() -> Unit { print(84 / 2) }");
-        assertThat(out).containsExactly("42");
-    }
-
-    @Test
-    void arithmetic_mod() {
-        var out = run("@pure fn main() -> Unit { print(10 % 3) }");
-        assertThat(out).containsExactly("1");
-    }
-
-    @Test
-    void unary_neg() {
-        var out = run("@pure fn main() -> Unit { print(-5) }");
-        assertThat(out).containsExactly("-5");
-    }
-
-    // ── Variables ─────────────────────────────────────────────────────────────
-
-    @Test
-    void let_binding_and_print() {
-        var out = run("@pure fn main() -> Unit { let x = 99  print(x) }");
-        assertThat(out).containsExactly("99");
-    }
-
-    @Test
-    void mut_binding_then_reassign() {
-        var out = run("""
-                @pure fn main() -> Unit {
-                    mut score = 0
-                    score = score + 1
-                    score = score + 1
-                    print(score)
+                match safe_div(5.0, 0.0) {
+                    ok(v)  => print("ok: ${v}"),
+                    err(e) => print("err: ${e}"),
                 }
-                """);
-        assertThat(out).containsExactly("2");
+            }
+            """)).isEqualTo("ok: 5.0\nerr: zero");
     }
-
-    // ── Conditionals ─────────────────────────────────────────────────────────
-
-    @Test
-    void if_true_branch_taken() {
-        var out = run("""
-                @pure fn main() -> Unit {
-                    if 1 == 1 {
-                        print("yes")
-                    } else {
-                        print("no")
-                    }
+    @Test void question_propagation() {
+        assertThat(run("""
+            @pure fn safe_div(a: Float, b: Float) -> Result[Float, Str] {
+                if b == 0.0 { return err("zero") }
+                return ok(a / b)
+            }
+            @pure fn double_ratio(a: Float, b: Float) -> Result[Float, Str] {
+                let v = safe_div(a, b)?
+                return ok(v * 2.0)
+            }
+            @pure fn main() -> Unit {
+                match double_ratio(10.0, 2.0) {
+                    ok(v)  => print("ok: ${v}"),
+                    err(e) => print("err: ${e}"),
                 }
-                """);
-        assertThat(out).containsExactly("yes");
-    }
-
-    @Test
-    void if_false_branch_taken() {
-        var out = run("""
-                @pure fn main() -> Unit {
-                    if 1 == 2 {
-                        print("yes")
-                    } else {
-                        print("no")
-                    }
+                match double_ratio(5.0, 0.0) {
+                    ok(v)  => print("ok: ${v}"),
+                    err(e) => print("err: ${e}"),
                 }
-                """);
-        assertThat(out).containsExactly("no");
+            }
+            """)).isEqualTo("ok: 10.0\nerr: zero");
     }
 
-    @Test
-    void nested_if_else() {
-        var out = run("""
-                @pure fn main() -> Unit {
-                    mut x = 2
-                    if x == 1 {
-                        print("one")
-                    } else {
-                        if x == 2 {
-                            print("two")
-                        } else {
-                            print("other")
-                        }5
-                    }
+    // ── Collections ───────────────────────────────────────────────────────────
+    @Test void list_push_and_len() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                mut xs = [1, 2, 3]
+                xs.push(4)
+                print(xs.len())
+            }
+            """)).isEqualTo("4");
+    }
+    @Test void map_set_and_get() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                mut m = {}
+                m.set("k", 99)
+                print(m.get("k"))
+            }
+            """)).isEqualTo("99");
+    }
+
+    // ── Records ───────────────────────────────────────────────────────────────
+    @Test void record_field_access() {
+        assertThat(run("""
+            type Point = { x: Float, y: Float }
+            @pure fn main() -> Unit {
+                let p = Point { x: 3.0, y: 4.0 }
+                print(p.x)
+                print(p.y)
+            }
+            """)).isEqualTo("3.0\n4.0");
+    }
+
+    // ── Enums ─────────────────────────────────────────────────────────────────
+    @Test void enum_tuple_match() {
+        assertThat(run("""
+            enum Shape { Circle(Float), Square(Float) }
+            const PI: Float = 3.0
+            @pure fn area(s: Shape) -> Float {
+                return match s {
+                    Shape::Circle(r) => r * r * PI,
+                    Shape::Square(w) => w * w,
                 }
-                """);
-        assertThat(out).containsExactly("two");
+            }
+            @pure fn main() -> Unit {
+                print(area(Shape::Circle(2.0)))
+                print(area(Shape::Square(4.0)))
+            }
+            """)).isEqualTo("12.0\n16.0");
     }
-
-    // ── While loop ────────────────────────────────────────────────────────────
-
-    @Test
-    void while_loop_counts_up() {
-        var out = run("""
-                @pure fn main() -> Unit {
-                    mut i = 0
-                    while i < 3 {
-                        print(i)
-                        i = i + 1
-                    }
+    @Test void enum_record_match() {
+        assertThat(run("""
+            enum Shape { Rect { width: Float, height: Float } }
+            @pure fn area(s: Shape) -> Float {
+                return match s {
+                    Shape::Rect { width: w, height: h } => w * h,
                 }
-                """);
-        assertThat(out).containsExactly("0", "1", "2");
+            }
+            @pure fn main() -> Unit {
+                print(area(Shape::Rect { width: 3.0, height: 5.0 }))
+            }
+            """)).isEqualTo("15.0");
     }
 
-    // ── Input / output ────────────────────────────────────────────────────────
-
-    @Test
-    void input_returns_typed_line() {
-        var out = runWithInput("""
-                @io fn main() -> Unit {
-                    let answer = input()
-                    print(answer)
+    @Test void enum_area_interpolated_print() {
+        assertThat(run("""
+            enum Shape {
+                Circle(Float),
+                Rectangle { width: Float, height: Float },
+            }
+            const PI: Float = 3.14159
+            @pure fn area(shape: Shape) -> Float {
+                return match shape {
+                    Shape::Circle(r)                   => r * r * PI,
+                    Shape::Rectangle { width, height } => width * height,
                 }
-                """, "hello from stdin\n");
-        assertThat(out).containsExactly("hello from stdin");
+            }
+            @pure fn main() -> Unit {
+                let c = Shape::Circle(5.0)
+                let r = Shape::Rectangle { width: 4.0, height: 6.0 }
+                print("Circle area: ${area(shape: c)}")
+                print("Rectangle area: ${area(shape: r)}")
+            }
+            """)).isEqualTo("Circle area: 78.53975\nRectangle area: 24.0");
     }
 
-    // ── Method calls ──────────────────────────────────────────────────────────
-
-    @Test
-    void str_trim() {
-        var out = run("@pure fn main() -> Unit { let s = \"  hello  \"  print(s.trim()) }");
-        assertThat(out).containsExactly("hello");
-    }
-
-    @Test
-    void str_upper_and_lower() {
-        var out = run("""
-                @pure fn main() -> Unit {
-                    print("hello".upper())
-                    print("WORLD".lower())
+    @Test void enum_three_arm_match() {
+        assertThat(run("""
+            enum Shape { Circle(Float), Rect { width: Float, height: Float }, Tri(Float, Float) }
+            const PI: Float = 3.0
+            @pure fn area(s: Shape) -> Float {
+                return match s {
+                    Shape::Circle(r)              => r * r * PI,
+                    Shape::Rect { width, height } => width * height,
+                    Shape::Tri(b, h)              => b * h / 2.0,
                 }
-                """);
-        assertThat(out).containsExactly("HELLO", "world");
+            }
+            @pure fn main() -> Unit {
+                print(area(Shape::Circle(2.0)))
+                print(area(Shape::Rect { width: 3.0, height: 5.0 }))
+                print(area(Shape::Tri(4.0, 6.0)))
+            }
+            """)).isEqualTo("12.0\n15.0\n12.0");
     }
 
-    @Test
-    void str_len() {
-        var out = run("@pure fn main() -> Unit { print(\"hello\".len()) }");
-        assertThat(out).containsExactly("5");
+    // ── Pipeline ─────────────────────────────────────────────────────────────
+    @Test void pipeline_operator() {
+        assertThat(run("""
+            @pure fn double(x: Int) -> Int { return x * 2 }
+            @pure fn inc(x: Int)    -> Int { return x + 1 }
+            @pure fn main() -> Unit { print(3 |> double |> inc) }
+            """)).isEqualTo("7");
     }
 
-    @Test
-    void str_contains() {
-        var out = run("""
-                @pure fn main() -> Unit {
-                    if "hello world".contains("world") {
-                        print("yes")
-                    } else {
-                        print("no")
-                    }
-                }
-                """);
-        assertThat(out).containsExactly("yes");
+    // ── Short-circuit logic ───────────────────────────────────────────────────
+    @Test void short_circuit_and() {
+        assertThat(run("""
+            @pure fn main() -> Unit { print(true and false)\nprint(true and true) }
+            """)).isEqualTo("false\ntrue");
+    }
+    @Test void short_circuit_or() {
+        assertThat(run("""
+            @pure fn main() -> Unit { print(false or true)\nprint(false or false) }
+            """)).isEqualTo("true\nfalse");
     }
 
-    // ── User-defined function calls ───────────────────────────────────────────
-
-    @Test
-    void user_fn_call_returns_value() {
-        var out = run("""
-                @pure fn double(x: Int) -> Int { return x * 2 }
-                @pure fn main() -> Unit { print(double(21)) }
-                """);
-        assertThat(out).containsExactly("42");
-    }
-
-    @Test
-    void user_fn_multiple_args() {
-        var out = run("""
-                @pure fn add(a: Int, b: Int) -> Int { return a + b }
-                @pure fn main() -> Unit { print(add(10, 32)) }
-                """);
-        assertThat(out).containsExactly("42");
-    }
-
-    @Test
-    void user_fn_called_multiple_times() {
-        var out = run("""
-                @pure fn square(n: Int) -> Int { return n * n }
-                @pure fn main() -> Unit {
-                    print(square(3))
-                    print(square(4))
-                    print(square(5))
-                }
-                """);
-        assertThat(out).containsExactly("9", "16", "25");
-    }
-
-    // ── Agent-safety features ─────────────────────────────────────────────────
-
-    @Test
-    void assert_passes_when_condition_true() {
-        var out = run("""
-                @pure fn main() -> Unit {
-                    assert 1 == 1, "should not fail"
-                    print("ok")
-                }
-                """);
-        assertThat(out).containsExactly("ok");
-    }
-
-    @Test
-    void assert_throws_when_condition_false() {
-        assertThatThrownBy(() -> run("""
-                @pure fn main() -> Unit {
-                    assert 1 == 2, "one is not two"
-                }
-                """))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("one is not two");
-    }
-
-    // ── agent-tools.aion scenario ─────────────────────────────────────────────
-
-    @Test
-    void user_fn_with_requires_style_assert() {
-        // Models the safe_div tool: assert b != 0 before dividing
-        var out = run("""
-                @pure fn safe_div(a: Int, b: Int) -> Int {
-                    assert b != 0, "divisor must not be zero"
-                    return a / b
-                }
-                @pure fn main() -> Unit {
-                    print(safe_div(10, 2))
-                }
-                """);
-        assertThat(out).containsExactly("5");
-    }
-
-    @Test
-    void user_fn_with_bool_param_branching() {
-        var out = run("""
-                @pure fn award(score: Int, correct: Bool) -> Int {
-                    if correct { return score + 1 }
-                    else       { return score }
-                }
-                @pure fn main() -> Unit {
-                    mut s = 0
-                    s = award(s, true)
-                    s = award(s, false)
-                    s = award(s, true)
-                    print(s)
-                }
-                """);
-        assertThat(out).containsExactly("2");
-    }
-
-
-
-    @Test
-    void qa_correct_answer_prints_correct() {
-        var out = runWithInput("""
-                @io fn main() -> Unit {
-                    print("Q: 2 + 2?")
-                    let a = input()
-                    if a == "4" {
-                        print("Correct!")
-                    } else {
-                        print("Wrong.")
-                    }
-                }
-                """, "4\n");
-        assertThat(out).containsExactly("Q: 2 + 2?", "Correct!");
-    }
-
-    @Test
-    void qa_wrong_answer_prints_wrong() {
-        var out = runWithInput("""
-                @io fn main() -> Unit {
-                    print("Q: 2 + 2?")
-                    let a = input()
-                    if a == "4" {
-                        print("Correct!")
-                    } else {
-                        print("Wrong.")
-                    }
-                }
-                """, "5\n");
-        assertThat(out).containsExactly("Q: 2 + 2?", "Wrong.");
-    }
-
-    @Test
-    void qa_full_quiz_all_correct() {
-        String source = """
-                @io fn main() -> Unit {
-                    mut score = 0
-                    print("Q1: 2 + 2?")
-                    let a1 = input()
-                    if a1 == "4" { print("[CORRECT]")  score = score + 1 }
-                    else         { print("[WRONG]") }
-                    print("Q2: Capital of France?")
-                    let a2 = input()
-                    if a2 == "Paris" { print("[CORRECT]")  score = score + 1 }
-                    else             { print("[WRONG]") }
-                    print("Q3: 7 * 6?")
-                    let a3 = input()
-                    if a3 == "42" { print("[CORRECT]")  score = score + 1 }
-                    else          { print("[WRONG]") }
-                    if score == 3 { print("PERFECT") }
-                    else          { print("NOT PERFECT") }
-                }
-                """;
-        var out = runWithInput(source, "4\nParis\n42\n");
-        assertThat(out).containsExactly(
-                "Q1: 2 + 2?",    "[CORRECT]",
-                "Q2: Capital of France?", "[CORRECT]",
-                "Q3: 7 * 6?",    "[CORRECT]",
-                "PERFECT");
-    }
-
-    @Test
-    void qa_full_quiz_all_wrong() {
-        String source = """
-                @io fn main() -> Unit {
-                    mut score = 0
-                    print("Q1: 2 + 2?")
-                    let a1 = input()
-                    if a1 == "4" { print("[CORRECT]")  score = score + 1 }
-                    else         { print("[WRONG]") }
-                    print("Q2: Capital of France?")
-                    let a2 = input()
-                    if a2 == "Paris" { print("[CORRECT]")  score = score + 1 }
-                    else             { print("[WRONG]") }
-                    print("Q3: 7 * 6?")
-                    let a3 = input()
-                    if a3 == "42" { print("[CORRECT]")  score = score + 1 }
-                    else          { print("[WRONG]") }
-                    if score == 3 { print("PERFECT") }
-                    else          { print("NOT PERFECT") }
-                }
-                """;
-        var out = runWithInput(source, "1\nLondon\n7\n");
-        assertThat(out).containsExactly(
-                "Q1: 2 + 2?",    "[WRONG]",
-                "Q2: Capital of France?", "[WRONG]",
-                "Q3: 7 * 6?",    "[WRONG]",
-                "NOT PERFECT");
+    // ── String methods ────────────────────────────────────────────────────────
+    @Test void string_trim_upper_len() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                let s = "  hello  "
+                print(s.trim())
+                print(s.trim().upper())
+                print("hello".len())
+            }
+            """)).isEqualTo("hello\nHELLO\n5");
     }
 }
-

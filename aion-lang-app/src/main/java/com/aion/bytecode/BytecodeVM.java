@@ -6,10 +6,8 @@ import java.util.*;
 
 /**
  * Stack-based VM for Aion bytecode with a proper call stack.
- *
  * Primitive Java types are used for scalars:
  *   Int → Long, Float → Double, Bool → Boolean, Str → String, None → null
- *
  * Composite types use {@link VmValue} sealed subtypes:
  *   SomeVal, NoneVal, OkVal, ErrVal, EnumVal, RecordVal, ListVal, MapVal
  */
@@ -26,11 +24,10 @@ public class BytecodeVM {
         frames.clear(); stack.clear(); locals = new HashMap<>();
         List<Instruction> instrs = bytecode.instructions;
         int ip = 0;
-        while (ip < instrs.size()) ip = execute(instrs.get(ip), ip, instrs.size(), instrs);
+        while (ip < instrs.size()) ip = execute(instrs.get(ip), ip, instrs.size());
     }
 
-    @SuppressWarnings({"unchecked","rawtypes"})
-    private int execute(Instruction instr, int ip, int total, List<Instruction> instrs) {
+    private int execute(Instruction instr, int ip, int total) {
         switch (instr) {
 
             // ── Literals ─────────────────────────────────────────────────────
@@ -38,10 +35,10 @@ public class BytecodeVM {
             case Instruction.PushFloat  p -> stack.push(p.value());
             case Instruction.PushStr    p -> stack.push(p.value());
             case Instruction.PushBool   p -> stack.push(p.value());
-            case Instruction.PushNone   ign -> stack.push(null);
-            case Instruction.PushSome   ign -> stack.push(new SomeVal(stack.pop()));
-            case Instruction.PushOk     ign -> stack.push(new OkVal(stack.pop()));
-            case Instruction.PushErr    ign -> stack.push(new ErrVal(stack.pop()));
+            case Instruction.PushNone   ignored -> stack.push(new NoneVal());
+            case Instruction.PushSome   ignored -> stack.push(new SomeVal(stack.pop()));
+            case Instruction.PushOk     ignored -> stack.push(new OkVal(stack.pop()));
+            case Instruction.PushErr    ignored -> stack.push(new ErrVal(stack.pop()));
             case Instruction.PushList   p -> {
                 Object[] elems = new Object[p.size()];
                 for (int i = p.size() - 1; i >= 0; i--) elems[i] = stack.pop();
@@ -69,12 +66,12 @@ public class BytecodeVM {
             }
 
             // ── Arithmetic ───────────────────────────────────────────────────
-            case Instruction.Add ign -> { Object b = stack.pop(), a = stack.pop(); stack.push(numericOp(a, b, '+')); }
-            case Instruction.Sub ign -> { Object b = stack.pop(), a = stack.pop(); stack.push(numericOp(a, b, '-')); }
-            case Instruction.Mul ign -> { Object b = stack.pop(), a = stack.pop(); stack.push(numericOp(a, b, '*')); }
-            case Instruction.Div ign -> { Object b = stack.pop(), a = stack.pop(); stack.push(numericOp(a, b, '/')); }
-            case Instruction.Mod ign -> { Object b = stack.pop(), a = stack.pop(); stack.push(numericOp(a, b, '%')); }
-            case Instruction.Neg ign -> {
+            case Instruction.Add ignored -> { Object b = stack.pop(), a = stack.pop(); stack.push(numericOp(a, b, '+')); }
+            case Instruction.Sub ignored -> { Object b = stack.pop(), a = stack.pop(); stack.push(numericOp(a, b, '-')); }
+            case Instruction.Mul ignored -> { Object b = stack.pop(), a = stack.pop(); stack.push(numericOp(a, b, '*')); }
+            case Instruction.Div ignored -> { Object b = stack.pop(), a = stack.pop(); stack.push(numericOp(a, b, '/')); }
+            case Instruction.Mod ignored -> { Object b = stack.pop(), a = stack.pop(); stack.push(numericOp(a, b, '%')); }
+            case Instruction.Neg ignored -> {
                 Object v = stack.pop();
                 if (v instanceof Long l)        stack.push(-l);
                 else if (v instanceof Double d) stack.push(-d);
@@ -82,17 +79,17 @@ public class BytecodeVM {
             }
 
             // ── Comparison ───────────────────────────────────────────────────
-            case Instruction.Eq  ign -> { Object b = stack.pop(), a = stack.pop(); stack.push(vmEquals(a, b)); }
-            case Instruction.Ne  ign -> { Object b = stack.pop(), a = stack.pop(); stack.push(!vmEquals(a, b)); }
-            case Instruction.Lt  ign -> { Object b = stack.pop(), a = stack.pop(); stack.push(compare(a, b) < 0); }
-            case Instruction.Le  ign -> { Object b = stack.pop(), a = stack.pop(); stack.push(compare(a, b) <= 0); }
-            case Instruction.Gt  ign -> { Object b = stack.pop(), a = stack.pop(); stack.push(compare(a, b) > 0); }
-            case Instruction.Ge  ign -> { Object b = stack.pop(), a = stack.pop(); stack.push(compare(a, b) >= 0); }
+            case Instruction.Eq  ignored -> { Object b = stack.pop(), a = stack.pop(); stack.push(vmEquals(a, b)); }
+            case Instruction.Ne  ignored -> { Object b = stack.pop(), a = stack.pop(); stack.push(!vmEquals(a, b)); }
+            case Instruction.Lt  ignored -> { Object b = stack.pop(), a = stack.pop(); stack.push(compare(a, b) < 0); }
+            case Instruction.Le  ignored -> { Object b = stack.pop(), a = stack.pop(); stack.push(compare(a, b) <= 0); }
+            case Instruction.Gt  ignored -> { Object b = stack.pop(), a = stack.pop(); stack.push(compare(a, b) > 0); }
+            case Instruction.Ge  ignored -> { Object b = stack.pop(), a = stack.pop(); stack.push(compare(a, b) >= 0); }
 
             // ── Logic ─────────────────────────────────────────────────────────
-            case Instruction.And ign -> { boolean b = asBool(stack.pop()), a = asBool(stack.pop()); stack.push(a && b); }
-            case Instruction.Or  ign -> { boolean b = asBool(stack.pop()), a = asBool(stack.pop()); stack.push(a || b); }
-            case Instruction.Not ign -> stack.push(!asBool(stack.pop()));
+            case Instruction.And ignored -> { boolean b = asBool(stack.pop()), a = asBool(stack.pop()); stack.push(a && b); }
+            case Instruction.Or  ignored -> { boolean b = asBool(stack.pop()), a = asBool(stack.pop()); stack.push(a || b); }
+            case Instruction.Not ignored -> stack.push(!asBool(stack.pop()));
             // Short-circuit AND: peek TOS; if false jump (leave false on stack); else pop and eval right
             case Instruction.AndShort p -> {
                 if (!asBool(stack.peek())) return p.target();
@@ -105,7 +102,7 @@ public class BytecodeVM {
             }
 
             // ── String ────────────────────────────────────────────────────────
-            case Instruction.Concat ign -> {
+            case Instruction.Concat ignored -> {
                 String b = format(stack.pop()), a = format(stack.pop());
                 stack.push(a + b);
             }
@@ -113,23 +110,23 @@ public class BytecodeVM {
             // ── Variables ─────────────────────────────────────────────────────
             case Instruction.Store st -> locals.put(st.name(), stack.pop());
             case Instruction.Load  ld -> stack.push(lookupVar(ld.name()));
-            case Instruction.Dup   ign -> stack.push(stack.peek());
+            case Instruction.Dup   ignored -> stack.push(stack.peek());
 
             // ── Field / index access ──────────────────────────────────────────
             case Instruction.GetField gf -> stack.push(getField(stack.pop(), gf.field()));
-            case Instruction.GetIndex  ign -> {
+            case Instruction.GetIndex  ignored -> {
                 Object idx = stack.pop(), recv = stack.pop();
                 stack.push(getIndex(recv, idx));
             }
-            case Instruction.SetIndex ign -> {
+            case Instruction.SetIndex ignored -> {
                 Object val = stack.pop(), idx = stack.pop(), recv = stack.pop();
                 setIndex(recv, idx, val);
                 // no push — assignment is a statement
             }
 
             // ── I/O ───────────────────────────────────────────────────────────
-            case Instruction.Print    ign -> System.out.println(format(stack.pop()));
-            case Instruction.ReadLine ign -> stack.push(scanner.nextLine());
+            case Instruction.Print    ignored -> System.out.println(format(stack.pop()));
+            case Instruction.ReadLine ignored -> stack.push(scanner.nextLine());
 
             // ── Control flow ─────────────────────────────────────────────────
             case Instruction.Jump        j  -> { return j.target(); }
@@ -142,24 +139,37 @@ public class BytecodeVM {
             }
 
             // ── Pattern matching ─────────────────────────────────────────────
-            case Instruction.MatchInt    m -> { if (!(stack.peek() instanceof Long   l && l == m.value()))      return m.failJump(); }
-            case Instruction.MatchFloat  m -> { if (!(stack.peek() instanceof Double d && d == m.value()))      return m.failJump(); }
-            case Instruction.MatchStr    m -> { if (!m.value().equals(stack.peek()))                             return m.failJump(); }
-            case Instruction.MatchBool   m -> { if (!(stack.peek() instanceof Boolean b && b == m.value()))     return m.failJump(); }
-            case Instruction.MatchNone   m -> { if (stack.peek() != null && !(stack.peek() instanceof NoneVal)) return m.failJump(); }
+            // Each Match instruction PEEKS TOS on success (leaving it for the next check)
+            // and POPS TOS on failure (cleaning up the dup'd copy before jumping to next arm).
+            case Instruction.MatchInt    m -> {
+                if (!(stack.peek() instanceof Long l && l == m.value())) { stack.pop(); return m.failJump(); }
+            }
+            case Instruction.MatchFloat  m -> {
+                if (!(stack.peek() instanceof Double d && d == m.value())) { stack.pop(); return m.failJump(); }
+            }
+            case Instruction.MatchStr    m -> {
+                if (!m.value().equals(stack.peek())) { stack.pop(); return m.failJump(); }
+            }
+            case Instruction.MatchBool   m -> {
+                if (!(stack.peek() instanceof Boolean b && b == m.value())) { stack.pop(); return m.failJump(); }
+            }
+            case Instruction.MatchNone   m -> {
+                if (!(stack.peek() == null || stack.peek() instanceof NoneVal)) { stack.pop(); return m.failJump(); }
+            }
             case Instruction.MatchTag    m -> {
                 Object top = stack.peek();
-                boolean matches;
-                if (top instanceof SomeVal  && m.typeName().equals("Option") && m.variant().equals("Some")) matches = true;
-                else if (top instanceof NoneVal && m.typeName().equals("Option") && m.variant().equals("None")) matches = true;
-                else if (top instanceof OkVal   && m.typeName().equals("Result") && m.variant().equals("Ok"))   matches = true;
-                else if (top instanceof ErrVal  && m.typeName().equals("Result") && m.variant().equals("Err"))  matches = true;
-                else if (top instanceof EnumVal ev)   matches = ev.typeName().equals(m.typeName()) && ev.variant().equals(m.variant());
-                else if (top instanceof RecordVal rv && m.typeName().equals("record")) matches = rv.typeName().equals(m.variant());
-                else matches = false;
-                if (!matches) return m.failJump();
+                boolean matches = switch (top) {
+                    case SomeVal  ignored when m.typeName().equals("Option")  && m.variant().equals("Some") -> true;
+                    case NoneVal  ignored when m.typeName().equals("Option")  && m.variant().equals("None") -> true;
+                    case OkVal    ignored when m.typeName().equals("Result")  && m.variant().equals("Ok")   -> true;
+                    case ErrVal   ignored when m.typeName().equals("Result")  && m.variant().equals("Err")  -> true;
+                    case EnumVal  ev -> ev.typeName().equals(m.typeName()) && ev.variant().equals(m.variant());
+                    case RecordVal rv when m.typeName().equals("record") -> rv.typeName().equals(m.variant());
+                    default -> false;
+                };
+                if (!matches) { stack.pop(); return m.failJump(); }
             }
-            case Instruction.UnwrapInner ign -> {
+            case Instruction.UnwrapInner ignored -> {
                 Object top = stack.pop();
                 switch (top) {
                     case SomeVal  sv -> stack.push(sv.inner());
@@ -188,28 +198,35 @@ public class BytecodeVM {
                 Object retVal = r.hasValue() ? stack.pop() : null;
                 Frame frame = frames.pop();
                 locals = frame.locals();
-                if (retVal != null) stack.push(retVal);
+                // Always push the return value when hasValue=true, even if it is null (none).
+                // Wrap null in NoneVal so the caller sees an actual value on the stack.
+                if (r.hasValue()) stack.push(retVal == null ? new NoneVal() : retVal);
                 return frame.returnAddr();
             }
-            case Instruction.Pop ign -> stack.pop();
+            case Instruction.Pop ignored -> stack.pop();
 
             // ── ? propagation ─────────────────────────────────────────────────
             case Instruction.Propagate p -> {
                 Object top = stack.pop();
-                if (top instanceof OkVal ov) {
-                    stack.push(ov.inner());
-                } else if (top instanceof SomeVal sv) {
-                    stack.push(sv.inner());
-                } else if (top instanceof ErrVal ev) {
-                    stack.push(ev);
-                    if (!frames.isEmpty()) { Frame f = frames.pop(); locals = f.locals(); return f.returnAddr(); }
-                    return p.epilogueAddr();
-                } else if (top == null || top instanceof NoneVal) {
-                    stack.push(new NoneVal());
-                    if (!frames.isEmpty()) { Frame f = frames.pop(); locals = f.locals(); return f.returnAddr(); }
-                    return p.epilogueAddr();
-                } else {
-                    stack.push(top); // plain value — leave it
+                switch (top) {
+                    case OkVal   ov -> stack.push(ov.inner());
+                    case SomeVal sv -> stack.push(sv.inner());
+                    case ErrVal  ignored -> {
+                        stack.push(top);
+                        if (!frames.isEmpty()) { Frame f = frames.pop(); locals = f.locals(); return f.returnAddr(); }
+                        return p.epilogueAddr();
+                    }
+                    case NoneVal ignored -> {
+                        stack.push(new NoneVal());
+                        if (!frames.isEmpty()) { Frame f = frames.pop(); locals = f.locals(); return f.returnAddr(); }
+                        return p.epilogueAddr();
+                    }
+                    case null -> {
+                        stack.push(new NoneVal());
+                        if (!frames.isEmpty()) { Frame f = frames.pop(); locals = f.locals(); return f.returnAddr(); }
+                        return p.epilogueAddr();
+                    }
+                    default -> stack.push(top); // plain value — leave it
                 }
             }
 
@@ -223,13 +240,13 @@ public class BytecodeVM {
             }
 
             // ── Errors ────────────────────────────────────────────────────────
-            case Instruction.Throw    ign -> throw new RuntimeException((String) stack.pop());
-            case Instruction.Break    ign -> throw new RuntimeException("BUG: unpatched Break");
-            case Instruction.Continue ign -> throw new RuntimeException("BUG: unpatched Continue");
-            case Instruction.Stringify ign -> stack.push(format(stack.pop()));
+            case Instruction.Throw    ignored -> throw new RuntimeException((String) stack.pop());
+            case Instruction.Break    ignored -> throw new RuntimeException("BUG: unpatched Break");
+            case Instruction.Continue ignored -> throw new RuntimeException("BUG: unpatched Continue");
+            case Instruction.Stringify ignored -> stack.push(format(stack.pop()));
 
             // ── Meta ──────────────────────────────────────────────────────────
-            case Instruction.Halt ign -> { return total; }
+            case Instruction.Halt ignored -> { return total; }
         }
         return ip + 1;
     }
@@ -276,7 +293,6 @@ public class BytecodeVM {
         };
     }
 
-    @SuppressWarnings("unchecked")
     private void setIndex(Object recv, Object idx, Object val) {
         switch (recv) {
             case ListVal lv -> {
@@ -291,7 +307,6 @@ public class BytecodeVM {
 
     // ── Built-in method dispatch ───────────────────────────────────────────────
 
-    @SuppressWarnings({"unchecked","rawtypes"})
     private Object dispatchMethod(Object receiver, String method, Object[] args) {
         return switch (receiver) {
             case String s -> switch (method) {
@@ -313,7 +328,7 @@ public class BytecodeVM {
             case ListVal lv -> switch (method) {
                 case "len"      -> (long) lv.elements().size();
                 case "push"     -> { lv.elements().add(args[0]); yield null; }
-                case "pop"      -> lv.elements().isEmpty() ? null : lv.elements().remove(lv.elements().size() - 1);
+                case "pop"      -> lv.elements().isEmpty() ? null : lv.elements().removeLast();
                 case "get"      -> {
                     int i = ((Long) args[0]).intValue();
                     yield (i >= 0 && i < lv.elements().size())
@@ -339,7 +354,7 @@ public class BytecodeVM {
                 default -> throw new RuntimeException("Map has no method '" + method + "'");
             };
             default -> throw new RuntimeException(
-                    "No method '" + method + "' on " + (receiver == null ? "none" : receiver.getClass().getSimpleName()));
+                    "No method '" + method + "' on " + receiver.getClass().getSimpleName());
         };
     }
 
@@ -386,7 +401,7 @@ public class BytecodeVM {
     private String format(Object v) {
         if (v == null) return "none";
         return switch (v) {
-            case NoneVal  ign -> "none";
+            case NoneVal  ignored -> "none";
             case SomeVal  sv  -> "some(" + format(sv.inner()) + ")";
             case OkVal    ov  -> "ok(" + format(ov.inner()) + ")";
             case ErrVal   ev  -> "err(" + format(ev.inner()) + ")";

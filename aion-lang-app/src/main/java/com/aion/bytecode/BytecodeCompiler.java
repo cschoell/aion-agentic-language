@@ -226,9 +226,13 @@ public class BytecodeCompiler {
 
         int loopEnd = out.size();
         patch(exitPatch, new Instruction.JumpIfNone(loopEnd));
-        emit(new Instruction.Pop());  // discard None
+         emit(new Instruction.Pop());  // discard None left by JumpIfNone on natural exit
 
-        patchLoopJumps(bodyStart, loopEnd - 1, loopStart, loopEnd);
+        int afterPop = out.size();   // break target: after the None-Pop
+
+        // continue → jump back to loop start (before get)
+        // break → jump past the None-Pop (stack is clean when breaking from body)
+        patchLoopJumps(bodyStart, loopEnd - 1, loopStart, afterPop);
     }
 
     private void patchLoopJumps(int from, int to, int contTarget, int breakTarget) {
@@ -303,18 +307,22 @@ public class BytecodeCompiler {
 
     private void compileBinOp(BinOp e) {
         if (e.op() == Node.BinOpKind.AND) {
+            // left AND right:
+            //   eval left; if false → jump to afterRight (false stays on stack)
+            //   if true → pop left, eval right; right IS the result
             compileExpr(e.left());
             int sc = emitPlaceholder(new Instruction.AndShort(0));
             compileExpr(e.right());
-            emit(new Instruction.And());
             patch(sc, new Instruction.AndShort(out.size()));
             return;
         }
         if (e.op() == Node.BinOpKind.OR) {
+            // left OR right:
+            //   eval left; if true → jump to afterRight (true stays on stack)
+            //   if false → pop left, eval right; right IS the result
             compileExpr(e.left());
             int sc = emitPlaceholder(new Instruction.OrShort(0));
             compileExpr(e.right());
-            emit(new Instruction.Or());
             patch(sc, new Instruction.OrShort(out.size()));
             return;
         }
@@ -413,7 +421,10 @@ public class BytecodeCompiler {
 
             // Consume original subject — arm body starts with clean stack
             emit(new Instruction.Pop());                    // [  ]
-            compileExpr(arm.body());                        // [result]
+            compileExpr(arm.body());                        // [result or nothing]
+            // Ensure a value is always on the stack after the arm body.
+            // Unit-producing expressions (print, method calls) leave nothing — push None.
+            if (!matchBodyProducesValue(arm.body())) emit(new Instruction.PushNone());
             endJumps.add(emitPlaceholder(new Instruction.Jump(0)));
 
             // Patch fail-jumps to next arm
@@ -542,6 +553,26 @@ public class BytecodeCompiler {
             case Instruction.MatchTag    p -> new Instruction.MatchTag(p.typeName(), p.variant(), target);
             default -> instr;
         };
+    }
+
+    /**
+     * True if this expression leaves a non-Unit value on the operand stack.
+     * Used to decide whether to pad a match arm body with PushNone.
+     */
+    private boolean matchBodyProducesValue(Expr e) {
+        if (e instanceof FnCall call) {
+            if (call.name().equals("print")) return false;
+            FnDecl fn = fnDecls.get(call.name());
+            if (fn != null) return !(fn.returnType() instanceof Node.TypeRef.UnitT);
+            return true;
+        }
+        if (e instanceof MethodCall mc) {
+            return switch (mc.method()) {
+                case "push", "pop", "set", "remove", "clear" -> false;
+                default -> true;
+            };
+        }
+        return true;
     }
 
     // ── Function calls ────────────────────────────────────────────────────────
