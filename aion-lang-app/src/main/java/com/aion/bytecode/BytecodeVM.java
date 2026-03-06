@@ -136,7 +136,10 @@ public class BytecodeVM {
             }
 
             // ── Errors ────────────────────────────────────────────────────────
-            case Instruction.Throw ignored -> throw new RuntimeException((String) stack.pop());
+            case Instruction.Throw    ignored -> throw new RuntimeException((String) stack.pop());
+            case Instruction.Break    ignored -> throw new RuntimeException("BUG: unpatched Break instruction");
+            case Instruction.Continue ignored -> throw new RuntimeException("BUG: unpatched Continue instruction");
+            case Instruction.Stringify ignored -> stack.push(String.valueOf(stack.pop()));
 
             // ── Meta ──────────────────────────────────────────────────────────
             case Instruction.Halt ignored -> { return total; }

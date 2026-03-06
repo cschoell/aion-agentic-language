@@ -43,7 +43,17 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
         if (ctx.importDecl() != null)  return (Node) visit(ctx.importDecl());
         if (ctx.typeDecl()   != null)  return (Node) visit(ctx.typeDecl());
         if (ctx.enumDecl()   != null)  return (Node) visit(ctx.enumDecl());
+        if (ctx.constDecl()  != null)  return (Node) visit(ctx.constDecl());
         return (Node) visit(ctx.fnDecl());
+    }
+
+    @Override
+    public Node visitConstDecl(AionParser.ConstDeclContext ctx) {
+        return new ConstDecl(
+                ctx.TYPE_IDENT().getText(),
+                convertTypeRef(ctx.typeRef()),
+                buildExpr(ctx.expr()),
+                pos(ctx));
     }
 
     // ── Import ────────────────────────────────────────────────────────────────
@@ -158,6 +168,8 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
         if (ctx.forStmt()      != null) return buildForStmt(ctx.forStmt());
         if (ctx.assertStmt()   != null) return buildAssertStmt(ctx.assertStmt());
         if (ctx.describeStmt() != null) return buildDescribeStmt(ctx.describeStmt());
+        if (ctx.breakStmt()    != null) return new Stmt.Break(pos(ctx));
+        if (ctx.continueStmt() != null) return new Stmt.Continue(pos(ctx));
         return new Stmt.ExprStmt(buildExpr(ctx.exprStmt().expr()), pos(ctx));
     }
 
@@ -328,6 +340,7 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
             case AionParser.IntLitContext    c -> new Expr.IntLit(Long.parseLong(c.INT_LIT().getText()), pos(c));
             case AionParser.FloatLitContext  c -> new Expr.FloatLit(Double.parseDouble(c.FLOAT_LIT().getText()), pos(c));
             case AionParser.StrLitContext    c -> new Expr.StrLit(stripQuotes(c.STR_LIT().getText()), pos(c));
+            case AionParser.InterpStrLitContext c -> buildInterpStr(c.INTERP_STR().getText(), pos(c));
             case AionParser.BoolTrueContext  c -> new Expr.BoolLit(true,  pos(c));
             case AionParser.BoolFalseContext c -> new Expr.BoolLit(false, pos(c));
             case AionParser.NoneLitContext   c -> new Expr.NoneLit(pos(c));
@@ -339,10 +352,19 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
             case AionParser.VarRefContext    c -> new Expr.VarRef(c.IDENT().getText(), pos(c));
             case AionParser.EnumVariantRefContext c ->
                     new Expr.EnumVariantRef(c.TYPE_IDENT(0).getText(), c.TYPE_IDENT(1).getText(), pos(c));
+            case AionParser.EnumRecordLitContext c ->
+                    new Expr.EnumRecordLit(c.TYPE_IDENT(0).getText(), c.TYPE_IDENT(1).getText(),
+                            buildNamedArgs(c.namedArgList()), pos(c));
+            case AionParser.EnumTupleLitContext c ->
+                    new Expr.EnumTupleLit(c.TYPE_IDENT(0).getText(), c.TYPE_IDENT(1).getText(),
+                            buildArgs(c.argList()), pos(c));
             case AionParser.RecordLitContext c ->
                     new Expr.RecordLit(c.TYPE_IDENT().getText(), buildNamedArgs(c.namedArgList()), pos(c));
             case AionParser.FnCallContext c ->
                     new Expr.FnCall(c.IDENT().getText(), buildArgs(c.argList()), pos(c));
+            // Uppercase identifiers used as values (constants, e.g. MAX, GREETING)
+            case AionParser.ConstRefContext  c -> new Expr.VarRef(c.TYPE_IDENT().getText(), pos(c));
+            case AionParser.ConstFnCallContext c -> new Expr.FnCall(c.TYPE_IDENT().getText(), buildArgs(c.argList()), pos(c));
             case AionParser.MatchExprRefContext  c -> buildMatchExpr(c.matchExpr());
             case AionParser.BlockExprRefContext  c -> buildBlockExpr(c.blockExpr());
             case AionParser.ListLitRefContext    c -> buildListLit(c.listLit());
@@ -380,14 +402,52 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
         Expr subject = buildExpr(ctx.expr());
         List<MatchArm> arms = new ArrayList<>();
         for (var arm : ctx.matchArm()) {
-            Pattern pat = convertPattern(arm.pattern());
-            Expr body = arm.expr() != null
-                    ? buildExpr(arm.expr())
-                    : new Expr.BlockExpr(buildBlock(arm.block()).stmts(),
-                            new Expr.BoolLit(true, pos(arm)), pos(arm));
-            arms.add(new MatchArm(pat, body));
+            Pattern pat  = convertPattern(arm.pattern());
+            Expr guard   = arm.IF() != null ? buildExpr(arm.expr(0)) : null;
+            Expr bodyExpr = arm.IF() != null
+                    ? (arm.expr().size() > 1 ? buildExpr(arm.expr(1))
+                       : new Expr.BlockExpr(buildBlock(arm.block()).stmts(), new Expr.BoolLit(true, pos(arm)), pos(arm)))
+                    : (arm.expr().size() > 0 ? buildExpr(arm.expr(0))
+                       : new Expr.BlockExpr(buildBlock(arm.block()).stmts(), new Expr.BoolLit(true, pos(arm)), pos(arm)));
+            arms.add(new MatchArm(pat, guard, bodyExpr));
         }
         return new Expr.Match(subject, arms, pos(ctx));
+    }
+
+    /**
+     * Parse an INTERP_STR token like {@code "Hello ${name}, score=${score}!"}
+     * into an {@link Expr.InterpolatedStr} whose parts list alternates between
+     * raw {@code String} segments and {@link Expr} holes.
+     */
+    private Expr buildInterpStr(String raw, Pos pos) {
+        // raw includes surrounding quotes; strip them
+        String inner = raw.substring(1, raw.length() - 1);
+        List<Object> parts = new ArrayList<>();
+        int i = 0;
+        StringBuilder seg = new StringBuilder();
+        while (i < inner.length()) {
+            if (inner.startsWith("${", i)) {
+                parts.add(seg.toString());
+                seg.setLength(0);
+                int end = inner.indexOf('}', i + 2);
+                String exprSrc = inner.substring(i + 2, end);
+                // Sub-parse the expression snippet
+                parts.add(AionFrontend.parseExprString(exprSrc, pos.line()));
+                i = end + 1;
+            } else if (inner.startsWith("\\n", i)) {
+                seg.append('\n'); i += 2;
+            } else if (inner.startsWith("\\t", i)) {
+                seg.append('\t'); i += 2;
+            } else if (inner.startsWith("\\\"", i)) {
+                seg.append('"'); i += 2;
+            } else if (inner.startsWith("\\\\", i)) {
+                seg.append('\\'); i += 2;
+            } else {
+                seg.append(inner.charAt(i++));
+            }
+        }
+        parts.add(seg.toString());
+        return new Expr.InterpolatedStr(parts, pos);
     }
 
     private Expr buildBlockExpr(AionParser.BlockExprContext ctx) {

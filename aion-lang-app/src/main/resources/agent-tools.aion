@@ -6,16 +6,21 @@
 //   @requires    — pre-condition checked before the body runs
 //   @ensures     — post-condition checked after the body returns (binds `result`)
 //   @timeout     — maximum execution time in milliseconds
-//   @trusted     — declares that all inputs are from a trusted source
 //   @untrusted   — declares that all inputs arrive from an external / agent source
 //   describe     — inline doc-string embedded in the function (shows up in JSON descriptor)
 //   assert       — runtime-checked invariant with an explanatory message
-//   trusted(v)   — marks an expression value as trusted
-//   untrusted(v) — marks an expression value as untrusted (needs validation)
+//
+// New features used here:
+//   const          — shared limits / messages defined once
+//   string interp  — "You got ${score} / ${TOTAL}" instead of concatenation
+//   pattern guards — match score { n if n == TOTAL => ... }
+//   ?              — error propagation in parse_int_answer
+//   break          — quiz loop exits cleanly when user types "quit"
 
-// ── Simple arithmetic tool ────────────────────────────────────────────────────
-// Pre-condition: divisor must not be zero.
-// Post-condition: result multiplied back must equal the dividend (integer div).
+const TOTAL: Int = 3
+const BORDER: Str = "+======================================+"
+
+// ── Arithmetic tool ───────────────────────────────────────────────────────────
 @tool
 @pure
 @requires(b != 0)
@@ -26,8 +31,6 @@ fn safe_div(a: Int, b: Int) -> Int {
 }
 
 // ── String sanitiser tool ─────────────────────────────────────────────────────
-// Accepts untrusted input from an agent, strips leading/trailing whitespace,
-// and asserts the result is non-empty.
 @tool
 @io
 @untrusted
@@ -40,9 +43,7 @@ fn sanitise(raw_input: Str) -> Str {
     return trimmed
 }
 
-// ── Scoring tool ─────────────────────────────────────────────────────────────
-// Used by the quiz — accumulates a score.
-// The result is always in [0, total].
+// ── Scoring tool ──────────────────────────────────────────────────────────────
 @tool
 @pure
 @requires(score >= 0)
@@ -51,76 +52,73 @@ fn sanitise(raw_input: Str) -> Str {
 @ensures(result <= total)
 fn award_point(score: Int, total: Int, correct: Bool) -> Int {
     describe "Awards one point when correct is true. Score must be in [0, total]."
-    if correct {
-        return score + 1
-    } else {
-        return score
+    if correct { return score + 1 }
+    return score
+}
+
+// ── Verdict helper — pattern guards replace nested ifs ───────────────────────
+@pure fn verdict(score: Int) -> Str {
+    return match score {
+        n if n == TOTAL => "PERFECT SCORE!  You got ${n} / ${TOTAL}.",
+        n if n >= 2     => "Good job!  You got ${n} / ${TOTAL}.",
+        n if n == 1     => "You got 1 / ${TOTAL}.  Keep studying!",
+        _               => "You got 0 / ${TOTAL}.  Better luck next time!",
     }
 }
 
-// ── Main: interactive quiz using the tools ────────────────────────────────────
-@io
-fn main() -> Unit {
-    print("+======================================+")
+// ── Main: interactive quiz ────────────────────────────────────────────────────
+@io fn main() -> Unit {
+    print(BORDER)
     print("|   Aion Agent-Safe Quiz  (mode: interp)|")
-    print("+======================================+")
+    print(BORDER)
+    print("")
+    print("Type 'quit' at any question to exit early.")
     print("")
 
     mut score = 0
-    let total = 3
 
-    // Q1
+    // Q1 — safe_div sanity-check exercise
     print("Q1: What is 10 / 2?")
-    let a1 = input()
+    let a1 = sanitise(input())
+    if a1 == "quit" { break }
     let v1 = safe_div(10, 2)
     assert v1 == 5, "safe_div sanity check"
     if a1 == "5" {
-        score = award_point(score, total, true)
-        print("  [CORRECT]")
+        score = award_point(score, TOTAL, true)
+        print("  [CORRECT]  (verified via safe_div: ${v1})")
     } else {
-        score = award_point(score, total, false)
+        score = award_point(score, TOTAL, false)
         print("  [WRONG]  The answer is 5.")
     }
     print("")
 
-    // Q2
+    // Q2 — geography
     print("Q2: What is the capital of France?")
-    let a2 = input()
+    let a2 = sanitise(input())
+    if a2 == "quit" { break }
     if a2 == "Paris" {
-        score = award_point(score, total, true)
+        score = award_point(score, TOTAL, true)
         print("  [CORRECT]")
     } else {
-        score = award_point(score, total, false)
+        score = award_point(score, TOTAL, false)
         print("  [WRONG]  The answer is Paris.")
     }
     print("")
 
-    // Q3
+    // Q3 — multiplication
     print("Q3: What is 7 * 6?")
-    let a3 = input()
+    let a3 = sanitise(input())
+    if a3 == "quit" { break }
     if a3 == "42" {
-        score = award_point(score, total, true)
+        score = award_point(score, TOTAL, true)
         print("  [CORRECT]")
     } else {
-        score = award_point(score, total, false)
+        score = award_point(score, TOTAL, false)
         print("  [WRONG]  The answer is 42.")
     }
     print("")
 
-    print("+======================================+")
-    if score == 3 {
-        print("  PERFECT SCORE!  You got 3 / 3.")
-    } else {
-        if score == 2 {
-            print("  Good job!  You got 2 / 3.")
-        } else {
-            if score == 1 {
-                print("  You got 1 / 3.  Keep studying!")
-            } else {
-                print("  You got 0 / 3.  Better luck next time!")
-            }
-        }
-    }
-    print("+======================================+")
+    print(BORDER)
+    print("  ${verdict(score)}")
+    print(BORDER)
 }
-

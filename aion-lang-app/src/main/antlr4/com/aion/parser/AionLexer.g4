@@ -37,6 +37,9 @@ ASSERT      : 'assert' ;     // assert <expr>, "message"
 DESCRIBE    : 'describe' ;   // describe "doc-string"  (inside fn body, first stmt)
 TRUSTED     : 'trusted' ;    // trusted <expr>  — mark value as trusted
 UNTRUSTED   : 'untrusted' ;  // untrusted <expr> — mark value as untrusted
+CONST       : 'const' ;      // const NAME: Type = expr  (module-level constant)
+BREAK       : 'break' ;      // break  (exit innermost loop)
+CONTINUE    : 'continue' ;   // continue  (next iteration of innermost loop)
 
 // ── Effect annotations ────────────────────────────────────────────────────────
 ANN_PURE       : '@pure' ;
@@ -99,6 +102,8 @@ UNDERSCORE  : '_' ;
 // ── Literals ──────────────────────────────────────────────────────────────────
 INT_LIT     : '-'? [0-9]+ ;
 FLOAT_LIT   : '-'? [0-9]+ '.' [0-9]+ ;
+// Interpolated string — contains at least one ${...} hole; matched before plain STR_LIT
+INTERP_STR  : '"' (ESC | '$' '{' ~[}]+ '}' | ~["\\\n$])* '$' '{' ~[}]+ '}' (ESC | '$' '{' ~[}]+ '}' | ~["\\\n$])* '"' ;
 STR_LIT     : '"' (ESC | ~["\\\n])* '"' ;
 fragment ESC: '\\' [nrt"\\] ;
 

@@ -59,6 +59,15 @@ public class BytecodeCompiler {
 
         // Compile main and patch the initial jump to it
         patch(mainJumpIdx, new Instruction.Jump(out.size()));
+
+        // Initialise module-level constants before main body runs
+        for (Node decl : m.decls()) {
+            if (decl instanceof Node.ConstDecl c) {
+                compileExpr(c.value());
+                emit(new Instruction.Store(c.name()));
+            }
+        }
+
         compileFnBody(fnDecls.get("main"));  // main ends with Halt, not Return
         emit(new Instruction.Halt());
 
@@ -115,10 +124,12 @@ public class BytecodeCompiler {
                     emit(new Instruction.Return(false));
                 }
             }
-            case Stmt.For ignored -> throw new UnsupportedOperationException("for loops not yet supported.");
+            case Stmt.For ignored -> throw new UnsupportedOperationException("for loops not yet supported in bytecode.");
             case Stmt.Block b     -> compileBlock(b);
             case Stmt.Assert a    -> compileAssert(a);
             case Stmt.Describe ignored -> { /* doc-string — no bytecode */ }
+            case Stmt.Break ignored -> emit(new Instruction.Break());
+            case Stmt.Continue ignored -> emit(new Instruction.Continue());
         }
     }
 
@@ -167,9 +178,24 @@ public class BytecodeCompiler {
         int loopStart = out.size();
         compileExpr(wh.condition());
         int exitPatch = emitPlaceholder(new Instruction.JumpIfFalse(0));
+        // Track break/continue patch points for this loop
+        int bodyStart = out.size();
         compileBlock(wh.body());
         emit(new Instruction.Jump(loopStart));
-        patch(exitPatch, new Instruction.JumpIfFalse(out.size()));
+        int loopEnd = out.size();
+        patch(exitPatch, new Instruction.JumpIfFalse(loopEnd));
+        // Patch any Break/Continue instructions emitted inside the body
+        patchLoopJumps(bodyStart, loopEnd - 1, loopStart, loopEnd);
+    }
+
+    /** Patch Break (→ loopEnd) and Continue (→ continueTarget) instructions in [from, to). */
+    private void patchLoopJumps(int from, int to, int continueTarget, int breakTarget) {
+        for (int i = from; i <= to && i < out.size(); i++) {
+            if (out.get(i) instanceof Instruction.Break)
+                out.set(i, new Instruction.Jump(breakTarget));
+            else if (out.get(i) instanceof Instruction.Continue)
+                out.set(i, new Instruction.Jump(continueTarget));
+        }
     }
 
     // ── Expressions ───────────────────────────────────────────────────────────
@@ -188,6 +214,11 @@ public class BytecodeCompiler {
             case Expr.MethodCall e -> compileMethodCall(e);
             case Expr.TrustedExpr   e -> compileExpr(e.inner());
             case Expr.UntrustedExpr e -> compileExpr(e.inner());
+            case Expr.InterpolatedStr e -> compileInterpStr(e);
+            case Expr.EnumRecordLit e -> throw new UnsupportedOperationException(
+                    "Enum record literals not yet supported in bytecode: " + e.typeName() + "::" + e.variant());
+            case Expr.EnumTupleLit e -> throw new UnsupportedOperationException(
+                    "Enum tuple literals not yet supported in bytecode: " + e.typeName() + "::" + e.variant());
             default -> throw new UnsupportedOperationException(
                     "Expression not yet supported in bytecode: " + expr.getClass().getSimpleName());
         }
@@ -304,6 +335,21 @@ public class BytecodeCompiler {
             compileExpr(value);
         }
         emit(new Instruction.Print());
+    }
+
+    private void compileInterpStr(Node.Expr.InterpolatedStr e) {
+        // Evaluate and stringify each part, then concatenate them all
+        boolean first = true;
+        for (Object part : e.parts()) {
+            if (part instanceof String s) {
+                emit(new Instruction.PushStr(s));
+            } else {
+                compileExpr((Node.Expr) part);
+                emit(new Instruction.Stringify());
+            }
+            if (!first) emit(new Instruction.Concat());
+            first = false;
+        }
     }
 
     // ── Utilities ─────────────────────────────────────────────────────────────

@@ -17,6 +17,7 @@ public sealed interface Instruction permits
         Instruction.Jump, Instruction.JumpIfFalse, Instruction.JumpIfTrue,
         Instruction.Call, Instruction.Return, Instruction.Pop,
         Instruction.CallMethod,
+        Instruction.Break, Instruction.Continue, Instruction.Stringify,
         Instruction.Throw,
         Instruction.Halt {
 
@@ -90,6 +91,12 @@ public sealed interface Instruction permits
     record CallMethod(String method, int arity) implements Instruction {}
     /** Pop String message from TOS and throw a runtime error. */
     record Throw()                    implements Instruction {}
+    /** Temporary placeholder patched to Jump(breakTarget) by the compiler. */
+    record Break()                    implements Instruction {}
+    /** Temporary placeholder patched to Jump(continueTarget) by the compiler. */
+    record Continue()                 implements Instruction {}
+    /** Convert TOS to its string representation and push back. */
+    record Stringify()                implements Instruction {}
 
     // ── Meta ──────────────────────────────────────────────────────────────────
     record Halt() implements Instruction {}

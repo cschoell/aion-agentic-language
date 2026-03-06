@@ -1,14 +1,25 @@
 // ── Aion sample program ────────────────────────────────────────────────────
 //
 // Demonstrates the core language features:
-//   - type declarations (records)
-//   - enum (sum types)
+//   - type declarations (records) and enums (sum types)
 //   - fn with effect annotations
 //   - match, Option, Result
 //   - pipeline operator |>
 //   - named arguments
 //   - for / while loops
 //
+// New features shown:
+//   const          — PI, MAX_USERS defined at the top
+//   string interp  — "${name}" instead of "Hello, " + name + "!"
+//   pattern guards — classify numbers and shapes by condition
+//   ?              — error propagation with Result
+//   break          — early loop exit
+//   continue       — skip unwanted iterations
+
+// ── Constants ─────────────────────────────────────────────────────────────
+
+const PI: Float = 3.14159
+const MAX_USERS: Int = 10
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -40,15 +51,27 @@ enum Color {
     return a + b
 }
 
+// String interpolation instead of concatenation
 @pure fn greet(name: Str) -> Str {
-    return "Hello, " + name + "!"
+    return "Hello, ${name}!"
 }
 
+// Pattern guards replace range chains in nested ifs
+@pure fn classify_age(age: Int) -> Str {
+    return match age {
+        n if n < 13  => "child",
+        n if n < 18  => "teenager",
+        n if n < 65  => "adult",
+        _            => "senior",
+    }
+}
+
+// const PI used directly in expression
 @pure fn area(shape: Shape) -> Float {
     return match shape {
-        Shape::Circle(r)               => r * r * 3.14159,
+        Shape::Circle(r)                   => r * r * PI,
         Shape::Rectangle { width, height } => width * height,
-        Shape::Triangle(a, b, c)       => {
+        Shape::Triangle(a, b, c)           => {
             let s = (a + b + c) / 2.0
             let under = s * (s - a) * (s - b) * (s - c)
             under
@@ -73,6 +96,12 @@ enum Color {
     return ok(a / b)
 }
 
+// ? propagation: if safe_divide returns err, ratio_str returns it immediately
+@pure fn ratio_str(a: Float, b: Float) -> Result[Str, Str] {
+    let v = safe_divide(a, b)?
+    return ok("${a} / ${b} = ${v}")
+}
+
 @pure fn find_user(users: List[User], name: Str) -> Option[User] {
     for u in users {
         if u.name == name {
@@ -82,74 +111,89 @@ enum Color {
     return none
 }
 
-// ── Pipeline usage ─────────────────────────────────────────────────────────
+// ── Pipeline helpers ───────────────────────────────────────────────────────
 
-@pure fn double_val(x: Int) -> Int {
-    return x * 2
-}
-
-@pure fn increment(x: Int) -> Int {
-    return x + 1
-}
+@pure fn double_val(x: Int) -> Int { return x * 2 }
+@pure fn increment(x: Int)  -> Int { return x + 1 }
 
 // ── Entry point ────────────────────────────────────────────────────────────
 
 @io fn main() -> Unit {
-    // Basic arithmetic
-    let result = add(a: 3, b: 4)
-    print(str(result))
 
-    // String operations
+    // -- Basic arithmetic with string interpolation --
+    let result = add(a: 3, b: 4)
+    print("3 + 4 = ${result}")
+
+    // -- Greeting using interp --
     let msg = greet(name: "Aion")
     print(msg)
 
-    // Enum + match
+    // -- Pattern guard: age classification --
+    print("Age 10 is a ${classify_age(10)}")
+    print("Age 16 is a ${classify_age(16)}")
+    print("Age 35 is an ${classify_age(35)}")
+    print("Age 70 is a ${classify_age(70)}")
+    print("")
+
+    // -- Enum + match with const PI --
     let c = Shape::Circle(5.0)
     let r = Shape::Rectangle { width: 4.0, height: 6.0 }
-    print(str(area(shape: c)))
-    print(str(area(shape: r)))
+    print("Circle area:    ${area(shape: c)}")
+    print("Rectangle area: ${area(shape: r)}")
+    print("Favourite color: ${color_name(c: Color::Red)}")
+    print("")
 
-    // Color enum
-    print(color_name(c: Color::Red))
-
-    // Result handling
-    let div_result = safe_divide(a: 10.0, b: 3.0)
-    match div_result {
-        ok(v)  => print("10 / 3 = " + str(v)),
-        err(e) => print("Error: " + e),
+    // -- Result with ? propagation --
+    match ratio_str(10.0, 3.0) {
+        ok(s)  => print(s),
+        err(e) => print("Error: ${e}"),
     }
-
-    let div_zero = safe_divide(a: 5.0, b: 0.0)
-    match div_zero {
-        ok(v)  => print(str(v)),
-        err(e) => print("Caught: " + e),
+    match ratio_str(5.0, 0.0) {
+        ok(s)  => print(s),
+        err(e) => print("Caught: ${e}"),
     }
+    print("")
 
-    // List operations
+    // -- List + break + continue --
     mut numbers = [1, 2, 3, 4, 5]
     numbers.push(6)
-    print(str(len(numbers)))
 
-    // Pipeline: 3 |> double_val |> increment  ==  7
-    let piped = 3 |> double_val |> increment
-    print(str(piped))
-
-    // For loop
-    mut total = 0
+    // Sum only even numbers; stop if we see a number > 5
+    mut even_sum = 0
     for n in numbers {
-        total = total + 1
+        if n > 5 { break }
+        if n == 3 { continue }         // skip 3 just to show continue
+        if n == 2 { even_sum = even_sum + n }
+        if n == 4 { even_sum = even_sum + n }
     }
-    print("count: " + str(total))
+    print("Even sum (2+4, skipping 3, stopping at 6): ${even_sum}")
 
-    // User lookup
+    // -- Pipeline: 3 |> double_val |> increment == 7 --
+    let piped = 3 |> double_val |> increment
+    print("Pipeline 3 |> double |> inc = ${piped}")
+    print("")
+
+    // -- While loop with MAX_USERS const --
+    mut count = 0
+    while count < MAX_USERS {
+        count = count + 1
+        if count == 3 { break }   // stop early to keep output short
+    }
+    print("Counted to ${count} (limit was ${MAX_USERS})")
+    print("")
+
+    // -- User lookup with interp in match arms --
     let users = [
         User { name: "Alice", age: 30 },
         User { name: "Bob",   age: 25 },
     ]
-    let found = find_user(users: users, name: "Alice")
-    match found {
-        some(u) => print("Found: " + u.name),
+    match find_user(users: users, name: "Alice") {
+        some(u) => print("Found ${u.name}, who is a ${classify_age(u.age)}"),
         none    => print("Not found"),
+    }
+    match find_user(users: users, name: "Eve") {
+        some(u) => print("Found ${u.name}"),
+        none    => print("Eve not found"),
     }
 }
 

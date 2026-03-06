@@ -27,6 +27,12 @@ topDecl
     | typeDecl
     | enumDecl
     | fnDecl
+    | constDecl
+    ;
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+constDecl
+    : CONST TYPE_IDENT COLON typeRef EQ expr
     ;
 
 // ── Imports ───────────────────────────────────────────────────────────────────
@@ -115,6 +121,20 @@ stmt
     | forStmt
     | assertStmt
     | describeStmt
+    | breakStmt
+    | continueStmt
+    ;
+
+// ...existing code...
+
+// break — exit innermost loop
+breakStmt
+    : BREAK
+    ;
+
+// continue — skip to next iteration of innermost loop
+continueStmt
+    : CONTINUE
     ;
 
 letStmt
@@ -218,6 +238,7 @@ primaryExpr
     : INT_LIT                                            # IntLit
     | FLOAT_LIT                                          # FloatLit
     | STR_LIT                                            # StrLit
+    | INTERP_STR                                         # InterpStrLit
     | TRUE                                               # BoolTrue
     | FALSE                                              # BoolFalse
     | NONE                                               # NoneLit
@@ -228,8 +249,12 @@ primaryExpr
     | UNTRUSTED LPAREN expr RPAREN                       # UntrustedExpr
     | IDENT LPAREN argList? RPAREN                       # FnCall
     | IDENT                                              # VarRef
+    | TYPE_IDENT DCOLON TYPE_IDENT LBRACE namedArgList? RBRACE  # EnumRecordLit
+    | TYPE_IDENT DCOLON TYPE_IDENT LPAREN argList? RPAREN       # EnumTupleLit
     | TYPE_IDENT DCOLON TYPE_IDENT                       # EnumVariantRef
     | TYPE_IDENT LBRACE namedArgList? RBRACE             # RecordLit
+    | TYPE_IDENT LPAREN argList? RPAREN                  # ConstFnCall
+    | TYPE_IDENT                                         # ConstRef
     | matchExpr                                          # MatchExprRef
     | blockExpr                                          # BlockExprRef
     | listLit                                            # ListLitRef
@@ -272,7 +297,7 @@ matchExpr
     ;
 
 matchArm
-    : pattern FAT_ARROW (expr | block)
+    : pattern (IF expr)? FAT_ARROW (expr | block)
     ;
 
 pattern

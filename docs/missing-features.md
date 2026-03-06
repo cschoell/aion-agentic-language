@@ -1,6 +1,7 @@
 # Aion — Missing features for larger systems
 
 > Analysis date: 2026-03-06  
+> Last updated: 2026-03-06 — items 4, 7, 8, 11, 12 implemented.  
 > Based on: grammar (`AionParser.g4`, `AionLexer.g4`), interpreter, bytecode VM, and `sample.aion`.
 
 Each gap is rated by impact:
@@ -234,32 +235,32 @@ import std.io.{ read_file as read }
 
 ## Summary
 
-| # | Feature | Priority | Effort |
-|---|---------|:--------:|:------:|
-| 1 | Module system + file loading | 🔴 | Large |
-| 2 | Closures / lambdas | 🔴 | Medium |
-| 3 | Traits / interfaces | 🔴 | Large |
-| 4 | `?` error propagation | 🟠 | Small |
-| 5 | Generic functions (real) | 🟠 | Large |
-| 6 | Deep mutable field assignment | 🟠 | Medium |
-| 7 | String interpolation | 🟡 | Small |
-| 8 | `break` / `continue` | 🟡 | Small |
-| 9 | Tuple types | 🟡 | Medium |
-| 10 | `@async` / concurrency | 🟡 | Large |
-| 11 | Pattern guards | 🟡 | Small |
-| 12 | `const` declarations | 🟢 | Small |
-| 13 | Selective imports | 🟢 | Small |
-| 14 | Numeric literal forms | 🟢 | Small |
+| # | Feature | Priority | Effort | Status |
+|---|---------|:--------:|:------:|:------:|
+| 1 | Module system + file loading | 🔴 | Large | — |
+| 2 | Closures / lambdas | 🔴 | Medium | — |
+| 3 | Traits / interfaces | 🔴 | Large | — |
+| 4 | `?` error propagation | 🟠 | Small | ✅ done |
+| 5 | Generic functions (real) | 🟠 | Large | — |
+| 6 | Deep mutable field assignment | 🟠 | Medium | — |
+| 7 | String interpolation | 🟡 | Small | ✅ done |
+| 8 | `break` / `continue` | 🟡 | Small | ✅ done |
+| 9 | Tuple types | 🟡 | Medium | — |
+| 10 | `@async` / concurrency | 🟡 | Large | — |
+| 11 | Pattern guards | 🟡 | Small | ✅ done |
+| 12 | `const` declarations | 🟢 | Small | ✅ done |
+| 13 | Selective imports | 🟢 | Small | — |
+| 14 | Numeric literal forms | 🟢 | Small | — |
 
 ## Recommended implementation order
 
 Getting the most leverage with the least effort:
 
-1. `?` error propagation *(small effort, unblocks all `Result`-heavy code)*
-2. `break` / `continue` *(small effort, unblocks common loop patterns)*
-3. String interpolation *(small effort, big readability win)*
-4. `const` declarations *(small effort, eliminates magic literals)*
-5. Pattern guards *(small effort, makes `match` much more expressive)*
+1. ~~`?` error propagation~~ ✅ **done**
+2. ~~`break` / `continue`~~ ✅ **done**
+3. ~~String interpolation~~ ✅ **done**
+4. ~~`const` declarations~~ ✅ **done**
+5. ~~Pattern guards~~ ✅ **done**
 6. Closures / lambdas *(medium effort, unlocks `map`/`filter`/`reduce`)*
 7. Module file loading *(large effort, prerequisite for all multi-file programs)*
 8. Traits *(large effort, prerequisite for generic contracts)*

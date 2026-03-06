@@ -35,6 +35,22 @@ public final class AionFrontend {
         return parse(CharStreams.fromString(source), sourceName);
     }
 
+    /**
+     * Parse a single expression (used for string interpolation holes).
+     * Wraps the expression in a minimal function to reuse the full parser.
+     */
+    public static Node.Expr parseExprString(String exprSrc, int lineHint) {
+        // Wrap in a throwaway module so we can reuse the full parser/builder
+        String wrapped = "@pure fn __expr__() -> Unit { let __v__ = " + exprSrc + " }";
+        ParseResult r = parseString(wrapped, "<interp>");
+        if (r.hasErrors() || r.module() == null)
+            throw new AionParseException("Invalid interpolation expression: " + exprSrc,
+                    new Node.Pos(lineHint, 0));
+        // Extract the let-binding value
+        Node.FnDecl fn = (Node.FnDecl) r.module().decls().getFirst();
+        return ((Node.Stmt.Let) fn.body().stmts().getFirst()).value();
+    }
+
     private static ParseResult parse(CharStream stream, String sourceName) {
         List<String> errors = new ArrayList<>();
 

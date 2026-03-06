@@ -28,6 +28,16 @@ public final class Interpreter {
         PropagateSignal(AionValue v) { super(null, null, true, false); this.value = v; }
     }
 
+    /** Thrown by `break` — caught by the enclosing while/for loop. */
+    static final class BreakSignal extends RuntimeException {
+        BreakSignal() { super(null, null, true, false); }
+    }
+
+    /** Thrown by `continue` — caught by the enclosing while/for loop. */
+    static final class ContinueSignal extends RuntimeException {
+        ContinueSignal() { super(null, null, true, false); }
+    }
+
     // ── State ─────────────────────────────────────────────────────────────────
 
     private final Environment globals;
@@ -40,13 +50,14 @@ public final class Interpreter {
     // ── Public API ────────────────────────────────────────────────────────────
 
     public void loadModule(Node.Module module) {
-        // First pass: register all top-level functions
+        // First pass: register all top-level functions and constants
         for (Node decl : module.decls()) {
             if (decl instanceof FnDecl fn) {
                 globals.define(fn.name(), new AionValue.FnVal(fn, globals));
+            } else if (decl instanceof Node.ConstDecl c) {
+                globals.define(c.name(), evalExpr(c.value(), globals));
             }
         }
-        // Second pass: execute top-level expressions (none in this language by design)
     }
 
     public AionValue callFunction(String name, List<AionValue> args) {
@@ -96,6 +107,9 @@ public final class Interpreter {
             }
         } catch (ReturnSignal r) {
             result = r.value;
+        } catch (PropagateSignal p) {
+            // ? operator early-returned an Err or None — that IS the function's result
+            result = p.value;
         }
 
         // ── Enforce @ensures post-conditions ──────────────────────────────────
@@ -165,6 +179,8 @@ public final class Interpreter {
                 }
             }
             case Stmt.Describe s -> { /* doc-string — no runtime effect */ }
+            case Stmt.Break    s -> throw new BreakSignal();
+            case Stmt.Continue s -> throw new ContinueSignal();
         }
     }
 
@@ -209,7 +225,13 @@ public final class Interpreter {
 
     private void execWhile(Stmt.While s, Environment env) {
         while (isTruthy(evalExpr(s.condition(), env))) {
-            execBlock(s.body(), env.child());
+            try {
+                execBlock(s.body(), env.child());
+            } catch (BreakSignal ignored) {
+                return;
+            } catch (ContinueSignal ignored) {
+                // continue to next iteration — re-evaluate condition
+            }
         }
     }
 
@@ -219,10 +241,16 @@ public final class Interpreter {
             case AionValue.ListVal l -> l.elements();
             default -> throw new AionRuntimeException("Cannot iterate over " + iter);
         };
-        for (AionValue item : items) {
+        for (AionValue item : new ArrayList<>(items)) {
             Environment loopEnv = env.child();
             loopEnv.define(s.var(), item);
-            execBlock(s.body(), loopEnv);
+            try {
+                execBlock(s.body(), loopEnv);
+            } catch (BreakSignal ignored) {
+                return;
+            } catch (ContinueSignal ignored) {
+                // continue to next item
+            }
         }
     }
 
@@ -243,6 +271,17 @@ public final class Interpreter {
             case Expr.UntrustedExpr e -> evalExpr(e.inner(), env);
             case Expr.VarRef   e -> env.lookup(e.name());
             case Expr.EnumVariantRef e -> new AionValue.EnumVal(e.typeName(), e.variant(), List.of());
+            case Expr.EnumRecordLit  e -> {
+                Map<String, AionValue> fields = new LinkedHashMap<>();
+                for (NamedArg arg : e.fields()) fields.put(arg.name(), evalExpr(arg.value(), env));
+                yield new AionValue.EnumVal(e.typeName(), e.variant(),
+                        List.of(new AionValue.RecordVal(e.variant(), fields)));
+            }
+            case Expr.EnumTupleLit   e -> {
+                List<AionValue> payload = new ArrayList<>();
+                for (Arg arg : e.args()) payload.add(resolveArg(arg, env));
+                yield new AionValue.EnumVal(e.typeName(), e.variant(), payload);
+            }
             case Expr.RecordLit e -> evalRecordLit(e, env);
             case Expr.FnCall   e -> evalFnCall(e, env);
             case Expr.MethodCall e -> evalMethodCall(e, env);
@@ -272,6 +311,17 @@ public final class Interpreter {
                     case AionValue.NoneVal ignored -> throw new PropagateSignal(new AionValue.NoneVal());
                     default -> inner;
                 };
+            }
+            case Expr.InterpolatedStr e -> {
+                StringBuilder sb = new StringBuilder();
+                for (Object part : e.parts()) {
+                    if (part instanceof String s) {
+                        sb.append(s);
+                    } else {
+                        sb.append(evalExpr((Expr) part, env));
+                    }
+                }
+                yield new AionValue.StrVal(sb.toString());
             }
         };
     }
@@ -365,6 +415,8 @@ public final class Interpreter {
         for (MatchArm arm : e.arms()) {
             Environment armEnv = env.child();
             if (matchPattern(arm.pattern(), subject, armEnv)) {
+                // Check optional guard: pattern [if guard] => body
+                if (arm.guard() != null && !isTruthy(evalExpr(arm.guard(), armEnv))) continue;
                 return evalExpr(arm.body(), armEnv);
             }
         }

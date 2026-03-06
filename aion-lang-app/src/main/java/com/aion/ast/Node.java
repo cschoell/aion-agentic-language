@@ -12,6 +12,9 @@ public interface Node {
 
     record ImportDecl(List<String> path, String alias, Pos pos) implements Node {}
 
+    /** Module-level constant: const NAME: Type = expr */
+    record ConstDecl(String name, TypeRef type, Expr value, Pos pos) implements Node {}
+
     record TypeDecl(String name, List<String> typeParams,
                     TypeDeclBody body, Pos pos) implements Node {}
 
@@ -72,7 +75,7 @@ public interface Node {
     sealed interface Stmt permits
             Stmt.Block, Stmt.Let, Stmt.Mut, Stmt.Assign,
             Stmt.Return, Stmt.ExprStmt, Stmt.If, Stmt.While, Stmt.For,
-            Stmt.Assert, Stmt.Describe {
+            Stmt.Assert, Stmt.Describe, Stmt.Break, Stmt.Continue {
 
         record Block(List<Stmt> stmts, Pos pos) implements Stmt {}
         record Let(String name, TypeRef type, Expr value, Pos pos) implements Stmt {}
@@ -87,6 +90,10 @@ public interface Node {
         record Assert(Expr condition, Expr message, Pos pos)       implements Stmt {}
         /** Inline doc-string: describe "..." — appears in tool descriptors */
         record Describe(String text, Pos pos)                      implements Stmt {}
+        /** Exit the innermost enclosing loop immediately. */
+        record Break(Pos pos)                                      implements Stmt {}
+        /** Skip to the next iteration of the innermost enclosing loop. */
+        record Continue(Pos pos)                                   implements Stmt {}
     }
 
     record IfBranch(Expr condition, Stmt.Block body) {}
@@ -100,11 +107,12 @@ public interface Node {
     sealed interface Expr permits
             Expr.IntLit, Expr.FloatLit, Expr.StrLit, Expr.BoolLit,
             Expr.NoneLit, Expr.SomeLit, Expr.OkLit, Expr.ErrLit,
-            Expr.VarRef, Expr.EnumVariantRef, Expr.RecordLit,
+            Expr.VarRef, Expr.EnumVariantRef, Expr.RecordLit, Expr.EnumRecordLit, Expr.EnumTupleLit,
             Expr.FnCall, Expr.MethodCall, Expr.FieldAccess, Expr.IndexAccess,
             Expr.BinOp, Expr.UnaryOp, Expr.Pipe,
             Expr.Match, Expr.BlockExpr, Expr.ListLit, Expr.MapLit,
-            Expr.Propagate, Expr.TrustedExpr, Expr.UntrustedExpr {
+            Expr.Propagate, Expr.TrustedExpr, Expr.UntrustedExpr,
+            Expr.InterpolatedStr {
 
         record IntLit(long value, Pos pos)          implements Expr {}
         record FloatLit(double value, Pos pos)      implements Expr {}
@@ -117,6 +125,10 @@ public interface Node {
         record VarRef(String name, Pos pos)         implements Expr {}
         record EnumVariantRef(String typeName, String variant, Pos pos) implements Expr {}
         record RecordLit(String typeName, List<NamedArg> fields, Pos pos) implements Expr {}
+        /** Enum record variant literal: Shape::Rectangle { width: 4.0, height: 6.0 } */
+        record EnumRecordLit(String typeName, String variant, List<NamedArg> fields, Pos pos) implements Expr {}
+        /** Enum tuple variant literal: Shape::Circle(5.0) */
+        record EnumTupleLit(String typeName, String variant, List<Arg> args, Pos pos) implements Expr {}
         record FnCall(String name, List<Arg> args, Pos pos)              implements Expr {}
         record MethodCall(Expr receiver, String method, List<Arg> args, Pos pos) implements Expr {}
         record FieldAccess(Expr receiver, String field, Pos pos)         implements Expr {}
@@ -133,9 +145,17 @@ public interface Node {
         record TrustedExpr(Expr inner, Pos pos)                          implements Expr {}
         /** Marks a value as explicitly untrusted — from external/agent input. */
         record UntrustedExpr(Expr inner, Pos pos)                        implements Expr {}
+        /**
+         * String interpolation: "Hello ${name}, score=${score}".
+         * Parts alternates: raw String segments and Expr holes.
+         * e.g. ["Hello ", VarRef("name"), ", score=", VarRef("score"), ""]
+         */
+        record InterpolatedStr(List<Object> parts, Pos pos)              implements Expr {}
     }
 
-    record MatchArm(Pattern pattern, Expr body) {}
+    /** A match arm with an optional guard: pattern [if guard] => body */
+    record MatchArm(Pattern pattern, Expr guard, Expr body) {}
+
     record MapEntry(Expr key, Expr value) {}
 
     sealed interface Arg permits Arg.Named, Arg.Positional {

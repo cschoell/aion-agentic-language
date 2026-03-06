@@ -1,58 +1,96 @@
+// ── qa-demo.aion ──────────────────────────────────────────────────────────────
+//
+// Interactive 3-question quiz.
+//
+// New features used:
+//   const            — TOTAL questions defined once at the top
+//   string interp    — "Score: ${score} / ${TOTAL}" instead of + concatenation
+//   pattern guards   — match score { n if n == TOTAL => ... } for result message
+//   break            — clean loop exit when user types "quit"
+
+const TOTAL: Int = 3
+const BORDER: Str = "+======================================+"
+
+// Returns "correct" or "wrong: <expected>" based on the user's answer.
+@pure fn check(answer: Str, expected: Str) -> Str {
+    if answer == expected {
+        return "correct"
+    }
+    return "wrong: ${expected}"
+}
+
+// Render the final verdict using a pattern guard match.
+@pure fn verdict(score: Int) -> Str {
+    return match score {
+        n if n == TOTAL => "PERFECT SCORE! You got ${n} / ${TOTAL}.",
+        n if n >= 2     => "Good job! You got ${n} / ${TOTAL}.",
+        n if n == 1     => "You got 1 / ${TOTAL}. Keep studying!",
+        _               => "You got 0 / ${TOTAL}. Better luck next time!",
+    }
+}
+
 @io fn main() -> Unit {
-    print("+======================================+")
-    print("|        Aion Quiz  --  3 Questions    |")
-    print("+======================================+")
+    print(BORDER)
+    print("|        Aion Quiz  --  ${TOTAL} Questions    |")
+    print(BORDER)
+    print("")
+    print("Type 'quit' at any question to exit early.")
     print("")
 
     mut score = 0
+    mut running = true
 
-    // Question 1 -- arithmetic
+    // Q1 — arithmetic
     print("Q1: What is 2 + 2?")
     let a1 = input()
-    if a1 == "4" {
-        print("  [CORRECT]")
-        score = score + 1
-    } else {
-        print("  [WRONG]  The answer is 4.")
-    }
-    print("")
-
-    // Question 2 -- capital city
-    print("Q2: What is the capital of France?")
-    let a2 = input()
-    if a2 == "Paris" {
-        print("  [CORRECT]")
-        score = score + 1
-    } else {
-        print("  [WRONG]  The answer is Paris.")
-    }
-    print("")
-
-    // Question 3 -- multiplication
-    print("Q3: What is 7 * 6?")
-    let a3 = input()
-    if a3 == "42" {
-        print("  [CORRECT]")
-        score = score + 1
-    } else {
-        print("  [WRONG]  The answer is 42.")
-    }
-    print("")
-
-    // Final score
-    print("+======================================+")
-    if score == 3 {
-        print("  PERFECT SCORE!  You got 3 / 3.")
-    } else {
-        if score == 2 {
-            print("  Good job!  You got 2 / 3.")
+    if a1 == "quit" { running = false }
+    if running {
+        let r1 = check(a1, "4")
+        if r1 == "correct" {
+            score = score + 1
+            print("  [CORRECT]")
         } else {
-            if score == 1 {
-                print("  You got 1 / 3.  Keep studying!")
+            print("  [WRONG]  The answer is 4.")
+        }
+        print("")
+    }
+
+    // Q2 — geography
+    if running {
+        print("Q2: What is the capital of France?")
+        let a2 = input()
+        if a2 == "quit" { running = false }
+        if running {
+            let r2 = check(a2, "Paris")
+            if r2 == "correct" {
+                score = score + 1
+                print("  [CORRECT]")
             } else {
-                print("  You got 0 / 3.  Better luck next time!")
+                print("  [WRONG]  The answer is Paris.")
             }
+            print("")
         }
     }
-    print("+======================================+")
+
+    // Q3 — multiplication
+    if running {
+        print("Q3: What is 7 * 6?")
+        let a3 = input()
+        if a3 == "quit" { running = false }
+        if running {
+            let r3 = check(a3, "42")
+            if r3 == "correct" {
+                score = score + 1
+                print("  [CORRECT]")
+            } else {
+                print("  [WRONG]  The answer is 42.")
+            }
+            print("")
+        }
+    }
+
+    // Result
+    print(BORDER)
+    print("  ${verdict(score)}")
+    print(BORDER)
 }
