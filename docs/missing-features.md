@@ -2,6 +2,11 @@
 
 > Analysis date: 2026-03-06  
 > Last updated: 2026-03-06 — items 4, 7, 8, 11, 12 implemented; items 15–18 added.  
+> Code quality pass 2026-03-06 — `BytecodeVM` warnings resolved: unnamed `ign` pattern variables
+> renamed to `ignored`, empty-body `if` conditions in `MatchXxx` cases inverted, `MatchTag` and
+> `Propagate` `if`/`else-if` chains converted to `switch`, redundant `@SuppressWarnings` removed,
+> `removeLast()` substituted for index-based list removal, always-false null guard removed, unused
+> `instrs` parameter dropped from `execute()`. All 14 test tasks pass; bytecode demo output verified.  
 > Based on: grammar (`AionParser.g4`, `AionLexer.g4`), interpreter, bytecode VM, and `sample.aion`.
 
 Each gap is rated by impact:
