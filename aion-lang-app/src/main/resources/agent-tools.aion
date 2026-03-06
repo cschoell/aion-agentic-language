@@ -1,0 +1,126 @@
+// ── agent-tools.aion ──────────────────────────────────────────────────────────
+//
+// Demonstrates the AI-agent safety features of Aion:
+//
+//   @tool        — marks a function as callable by an AI agent
+//   @requires    — pre-condition checked before the body runs
+//   @ensures     — post-condition checked after the body returns (binds `result`)
+//   @timeout     — maximum execution time in milliseconds
+//   @trusted     — declares that all inputs are from a trusted source
+//   @untrusted   — declares that all inputs arrive from an external / agent source
+//   describe     — inline doc-string embedded in the function (shows up in JSON descriptor)
+//   assert       — runtime-checked invariant with an explanatory message
+//   trusted(v)   — marks an expression value as trusted
+//   untrusted(v) — marks an expression value as untrusted (needs validation)
+
+// ── Simple arithmetic tool ────────────────────────────────────────────────────
+// Pre-condition: divisor must not be zero.
+// Post-condition: result multiplied back must equal the dividend (integer div).
+@tool
+@pure
+@requires(b != 0)
+@ensures(result * b == a - a % b)
+fn safe_div(a: Int, b: Int) -> Int {
+    describe "Divides a by b. Requires b != 0. Safe for agent use."
+    return a / b
+}
+
+// ── String sanitiser tool ─────────────────────────────────────────────────────
+// Accepts untrusted input from an agent, strips leading/trailing whitespace,
+// and asserts the result is non-empty.
+@tool
+@io
+@untrusted
+@timeout(500)
+@requires(raw_input != "")
+fn sanitise(raw_input: Str) -> Str {
+    describe "Trims whitespace from agent-supplied input and validates it is non-empty."
+    let trimmed = raw_input.trim()
+    assert trimmed != "", "Input must not be blank after trimming"
+    return trimmed
+}
+
+// ── Scoring tool ─────────────────────────────────────────────────────────────
+// Used by the quiz — accumulates a score.
+// The result is always in [0, total].
+@tool
+@pure
+@requires(score >= 0)
+@requires(score <= total)
+@ensures(result >= 0)
+@ensures(result <= total)
+fn award_point(score: Int, total: Int, correct: Bool) -> Int {
+    describe "Awards one point when correct is true. Score must be in [0, total]."
+    if correct {
+        return score + 1
+    } else {
+        return score
+    }
+}
+
+// ── Main: interactive quiz using the tools ────────────────────────────────────
+@io
+fn main() -> Unit {
+    print("+======================================+")
+    print("|   Aion Agent-Safe Quiz  (mode: interp)|")
+    print("+======================================+")
+    print("")
+
+    mut score = 0
+    let total = 3
+
+    // Q1
+    print("Q1: What is 10 / 2?")
+    let a1 = input()
+    let v1 = safe_div(10, 2)
+    assert v1 == 5, "safe_div sanity check"
+    if a1 == "5" {
+        score = award_point(score, total, true)
+        print("  [CORRECT]")
+    } else {
+        score = award_point(score, total, false)
+        print("  [WRONG]  The answer is 5.")
+    }
+    print("")
+
+    // Q2
+    print("Q2: What is the capital of France?")
+    let a2 = input()
+    if a2 == "Paris" {
+        score = award_point(score, total, true)
+        print("  [CORRECT]")
+    } else {
+        score = award_point(score, total, false)
+        print("  [WRONG]  The answer is Paris.")
+    }
+    print("")
+
+    // Q3
+    print("Q3: What is 7 * 6?")
+    let a3 = input()
+    if a3 == "42" {
+        score = award_point(score, total, true)
+        print("  [CORRECT]")
+    } else {
+        score = award_point(score, total, false)
+        print("  [WRONG]  The answer is 42.")
+    }
+    print("")
+
+    print("+======================================+")
+    if score == 3 {
+        print("  PERFECT SCORE!  You got 3 / 3.")
+    } else {
+        if score == 2 {
+            print("  Good job!  You got 2 / 3.")
+        } else {
+            if score == 1 {
+                print("  You got 1 / 3.  Keep studying!")
+            } else {
+                print("  You got 0 / 3.  Better luck next time!")
+            }
+        }
+    }
+    print("+======================================+")
+}
+

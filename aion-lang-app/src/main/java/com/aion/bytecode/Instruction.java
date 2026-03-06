@@ -14,7 +14,10 @@ public sealed interface Instruction permits
         Instruction.Concat,
         Instruction.Store, Instruction.Load,
         Instruction.Print, Instruction.ReadLine,
-        Instruction.Jump, Instruction.JumpIfFalse,
+        Instruction.Jump, Instruction.JumpIfFalse, Instruction.JumpIfTrue,
+        Instruction.Call, Instruction.Return, Instruction.Pop,
+        Instruction.CallMethod,
+        Instruction.Throw,
         Instruction.Halt {
 
     // ── Literals ─────────────────────────────────────────────────────────────
@@ -66,6 +69,27 @@ public sealed interface Instruction permits
     record Jump(int target)           implements Instruction {}
     /** Pop boolean; jump to target if false. */
     record JumpIfFalse(int target)    implements Instruction {}
+    /** Pop boolean; jump to target if true. */
+    record JumpIfTrue(int target)     implements Instruction {}
+    /**
+     * Call a user-defined function.
+     * @param target  entry-point instruction index of the function
+     * @param arity   number of arguments already pushed on the stack (left-to-right)
+     * @param params  parameter names in order, used to populate the new frame's locals
+     */
+    record Call(int target, int arity, java.util.List<String> params) implements Instruction {}
+    /** Return from a function call — TOS is the return value (or nothing for Unit). */
+    record Return(boolean hasValue)   implements Instruction {}
+    /** Discard top-of-stack (used to drop unused expression results). */
+    record Pop()                      implements Instruction {}
+    /**
+     * Call a built-in method on the receiver.
+     * Stack before: [..., receiver, arg0, arg1, …, argN-1]  (receiver deepest)
+     * Stack after:  [..., result]
+     */
+    record CallMethod(String method, int arity) implements Instruction {}
+    /** Pop String message from TOS and throw a runtime error. */
+    record Throw()                    implements Instruction {}
 
     // ── Meta ──────────────────────────────────────────────────────────────────
     record Halt() implements Instruction {}

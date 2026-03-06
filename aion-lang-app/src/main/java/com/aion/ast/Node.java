@@ -44,7 +44,9 @@ public interface Node {
     sealed interface Annotation permits
             Annotation.Pure, Annotation.Io, Annotation.Mut,
             Annotation.Async, Annotation.Test, Annotation.Deprecated,
-            Annotation.Throws {
+            Annotation.Throws,
+            Annotation.Tool, Annotation.Requires, Annotation.Ensures,
+            Annotation.Timeout, Annotation.TrustedAnn, Annotation.UntrustedAnn {
         record Pure()                implements Annotation {}
         record Io()                  implements Annotation {}
         record Mut()                 implements Annotation {}
@@ -52,12 +54,25 @@ public interface Node {
         record Test()                implements Annotation {}
         record Deprecated()          implements Annotation {}
         record Throws(TypeRef type)  implements Annotation {}
+        /** Marks a function as an AI-agent–callable tool. */
+        record Tool()                implements Annotation {}
+        /** Pre-condition checked before the function body runs. */
+        record Requires(Expr condition) implements Annotation {}
+        /** Post-condition checked after the function body returns (bound to `result`). */
+        record Ensures(Expr condition)  implements Annotation {}
+        /** Maximum execution time in milliseconds. */
+        record Timeout(long millis)     implements Annotation {}
+        /** All parameters are treated as trusted input. */
+        record TrustedAnn()          implements Annotation {}
+        /** All parameters are treated as untrusted (external) input. */
+        record UntrustedAnn()        implements Annotation {}
     }
 
     // ── Statements ────────────────────────────────────────────────────────────
     sealed interface Stmt permits
             Stmt.Block, Stmt.Let, Stmt.Mut, Stmt.Assign,
-            Stmt.Return, Stmt.ExprStmt, Stmt.If, Stmt.While, Stmt.For {
+            Stmt.Return, Stmt.ExprStmt, Stmt.If, Stmt.While, Stmt.For,
+            Stmt.Assert, Stmt.Describe {
 
         record Block(List<Stmt> stmts, Pos pos) implements Stmt {}
         record Let(String name, TypeRef type, Expr value, Pos pos) implements Stmt {}
@@ -68,6 +83,10 @@ public interface Node {
         record If(List<IfBranch> branches, Stmt.Block elseBranch, Pos pos) implements Stmt {}
         record While(Expr condition, Stmt.Block body, Pos pos)     implements Stmt {}
         record For(String var, Expr iterable, Stmt.Block body, Pos pos) implements Stmt {}
+        /** Runtime-checked assertion: assert <cond> [, <message>] */
+        record Assert(Expr condition, Expr message, Pos pos)       implements Stmt {}
+        /** Inline doc-string: describe "..." — appears in tool descriptors */
+        record Describe(String text, Pos pos)                      implements Stmt {}
     }
 
     record IfBranch(Expr condition, Stmt.Block body) {}
@@ -85,7 +104,7 @@ public interface Node {
             Expr.FnCall, Expr.MethodCall, Expr.FieldAccess, Expr.IndexAccess,
             Expr.BinOp, Expr.UnaryOp, Expr.Pipe,
             Expr.Match, Expr.BlockExpr, Expr.ListLit, Expr.MapLit,
-            Expr.Propagate {
+            Expr.Propagate, Expr.TrustedExpr, Expr.UntrustedExpr {
 
         record IntLit(long value, Pos pos)          implements Expr {}
         record FloatLit(double value, Pos pos)      implements Expr {}
@@ -110,6 +129,10 @@ public interface Node {
         record ListLit(List<Expr> elements, Pos pos)                     implements Expr {}
         record MapLit(List<MapEntry> entries, Pos pos)                   implements Expr {}
         record Propagate(Expr inner, Pos pos)                            implements Expr {}
+        /** Marks a value as explicitly trusted — safe to pass to @trusted fns. */
+        record TrustedExpr(Expr inner, Pos pos)                          implements Expr {}
+        /** Marks a value as explicitly untrusted — from external/agent input. */
+        record UntrustedExpr(Expr inner, Pos pos)                        implements Expr {}
     }
 
     record MatchArm(Pattern pattern, Expr body) {}

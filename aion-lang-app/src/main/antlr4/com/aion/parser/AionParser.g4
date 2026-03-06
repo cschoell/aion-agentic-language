@@ -90,7 +90,13 @@ annotation
     | ANN_ASYNC
     | ANN_TEST
     | ANN_DEPRECATED
-    | ANN_THROWS LPAREN typeRef RPAREN
+    | ANN_THROWS    LPAREN typeRef RPAREN
+    | ANN_TOOL
+    | ANN_REQUIRES  LPAREN expr RPAREN
+    | ANN_ENSURES   LPAREN expr RPAREN
+    | ANN_TIMEOUT   LPAREN INT_LIT RPAREN
+    | ANN_TRUSTED
+    | ANN_UNTRUSTED
     ;
 
 // ── Statements ────────────────────────────────────────────────────────────────
@@ -107,6 +113,8 @@ stmt
     | ifStmt
     | whileStmt
     | forStmt
+    | assertStmt
+    | describeStmt
     ;
 
 letStmt
@@ -132,6 +140,16 @@ returnStmt
 
 exprStmt
     : expr
+    ;
+
+// assert <condition> [ , <message> ]
+assertStmt
+    : ASSERT expr (COMMA expr)?
+    ;
+
+// describe "doc-string" — structured documentation embedded in the function body
+describeStmt
+    : DESCRIBE STR_LIT
     ;
 
 ifStmt
@@ -206,6 +224,8 @@ primaryExpr
     | SOME LPAREN expr RPAREN                            # SomeLit
     | OK LPAREN expr RPAREN                              # OkLit
     | ERR LPAREN expr RPAREN                             # ErrLit
+    | TRUSTED   LPAREN expr RPAREN                       # TrustedExpr
+    | UNTRUSTED LPAREN expr RPAREN                       # UntrustedExpr
     | IDENT LPAREN argList? RPAREN                       # FnCall
     | IDENT                                              # VarRef
     | TYPE_IDENT DCOLON TYPE_IDENT                       # EnumVariantRef

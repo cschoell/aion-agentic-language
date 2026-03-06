@@ -69,12 +69,72 @@ public final class Interpreter {
         for (int i = 0; i < params.size(); i++) {
             env.define(params.get(i).name(), args.get(i));
         }
-        try {
-            execBlock(fn.decl().body(), env);
-            return new AionValue.UnitVal();
-        } catch (ReturnSignal r) {
-            return r.value;
+
+        // ── Enforce @requires pre-conditions ──────────────────────────────────
+        for (Node.Annotation ann : fn.decl().annotations()) {
+            if (ann instanceof Node.Annotation.Requires req) {
+                AionValue cond = evalExpr(req.condition(), env);
+                if (!isTruthy(cond))
+                    throw new AionRuntimeException(
+                            "Pre-condition violated in '" + fn.decl().name() + "': " + req.condition());
+            }
         }
+
+        // ── Enforce @timeout ──────────────────────────────────────────────────
+        long timeoutMs = fn.decl().annotations().stream()
+                .filter(a -> a instanceof Node.Annotation.Timeout)
+                .mapToLong(a -> ((Node.Annotation.Timeout) a).millis())
+                .findFirst().orElse(-1L);
+
+        AionValue result;
+        try {
+            if (timeoutMs > 0) {
+                result = runWithTimeout(fn, env, timeoutMs);
+            } else {
+                execBlock(fn.decl().body(), env);
+                result = new AionValue.UnitVal();
+            }
+        } catch (ReturnSignal r) {
+            result = r.value;
+        }
+
+        // ── Enforce @ensures post-conditions ──────────────────────────────────
+        env.define("result", result);
+        for (Node.Annotation ann : fn.decl().annotations()) {
+            if (ann instanceof Node.Annotation.Ensures ens) {
+                AionValue cond = evalExpr(ens.condition(), env);
+                if (!isTruthy(cond))
+                    throw new AionRuntimeException(
+                            "Post-condition violated in '" + fn.decl().name() + "': " + ens.condition());
+            }
+        }
+        return result;
+    }
+
+    private AionValue runWithTimeout(AionValue.FnVal fn, Environment env, long timeoutMs) {
+        var result = new AionValue[]{new AionValue.UnitVal()};
+        var error  = new RuntimeException[]{null};
+        Thread t = Thread.ofVirtual().start(() -> {
+            try {
+                execBlock(fn.decl().body(), env);
+            } catch (ReturnSignal r) {
+                result[0] = r.value;
+            } catch (RuntimeException e) {
+                error[0] = e;
+            }
+        });
+        try {
+            t.join(timeoutMs);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        if (t.isAlive()) {
+            t.interrupt();
+            throw new AionRuntimeException(
+                    "Function '" + fn.decl().name() + "' exceeded timeout of " + timeoutMs + "ms");
+        }
+        if (error[0] != null) throw error[0];
+        return result[0];
     }
 
     // ── Statements ────────────────────────────────────────────────────────────
@@ -95,6 +155,16 @@ public final class Interpreter {
             case Stmt.While s -> execWhile(s, env);
             case Stmt.For s -> execFor(s, env);
             case Stmt.Block s -> execBlock(s, env.child());
+            case Stmt.Assert s -> {
+                AionValue cond = evalExpr(s.condition(), env);
+                if (!isTruthy(cond)) {
+                    String msg = s.message() != null
+                            ? evalExpr(s.message(), env).toString()
+                            : "Assertion failed at " + s.pos();
+                    throw new AionRuntimeException("AssertionError: " + msg);
+                }
+            }
+            case Stmt.Describe s -> { /* doc-string — no runtime effect */ }
         }
     }
 
@@ -168,6 +238,9 @@ public final class Interpreter {
             case Expr.SomeLit  e -> new AionValue.SomeVal(evalExpr(e.inner(), env));
             case Expr.OkLit    e -> new AionValue.OkVal(evalExpr(e.inner(), env));
             case Expr.ErrLit   e -> new AionValue.ErrVal(evalExpr(e.inner(), env));
+            // trusted/untrusted are transparent at runtime — taint is a static property
+            case Expr.TrustedExpr   e -> evalExpr(e.inner(), env);
+            case Expr.UntrustedExpr e -> evalExpr(e.inner(), env);
             case Expr.VarRef   e -> env.lookup(e.name());
             case Expr.EnumVariantRef e -> new AionValue.EnumVal(e.typeName(), e.variant(), List.of());
             case Expr.RecordLit e -> evalRecordLit(e, env);

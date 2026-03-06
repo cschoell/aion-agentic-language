@@ -33,15 +33,25 @@ ERR         : 'err' ;
 AND         : 'and' ;
 OR          : 'or' ;
 NOT         : 'not' ;
+ASSERT      : 'assert' ;     // assert <expr>, "message"
+DESCRIBE    : 'describe' ;   // describe "doc-string"  (inside fn body, first stmt)
+TRUSTED     : 'trusted' ;    // trusted <expr>  — mark value as trusted
+UNTRUSTED   : 'untrusted' ;  // untrusted <expr> — mark value as untrusted
 
 // ── Effect annotations ────────────────────────────────────────────────────────
-ANN_PURE    : '@pure' ;
-ANN_IO      : '@io' ;
-ANN_MUT     : '@mut' ;
-ANN_THROWS  : '@throws' ;
-ANN_ASYNC   : '@async' ;
-ANN_TEST    : '@test' ;
+ANN_PURE       : '@pure' ;
+ANN_IO         : '@io' ;
+ANN_MUT        : '@mut' ;
+ANN_THROWS     : '@throws' ;
+ANN_ASYNC      : '@async' ;
+ANN_TEST       : '@test' ;
 ANN_DEPRECATED : '@deprecated' ;
+ANN_TOOL       : '@tool' ;                   // callable by AI agents
+ANN_REQUIRES   : '@requires' ;               // @requires(expr)   pre-condition
+ANN_ENSURES    : '@ensures' ;                // @ensures(expr)    post-condition
+ANN_TIMEOUT    : '@timeout' ;                // @timeout(ms)      max execution time
+ANN_TRUSTED    : '@trusted' ;               // @trusted          all params treated as trusted
+ANN_UNTRUSTED  : '@untrusted' ;             // @untrusted        all params treated as untrusted
 
 // ── Built-in types ────────────────────────────────────────────────────────────
 T_INT       : 'Int' ;

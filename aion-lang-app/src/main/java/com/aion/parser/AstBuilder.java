@@ -125,12 +125,18 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
     }
 
     private Annotation convertAnnotation(AionParser.AnnotationContext ctx) {
-        if (ctx.ANN_PURE()       != null) return new Annotation.Pure();
-        if (ctx.ANN_IO()         != null) return new Annotation.Io();
-        if (ctx.ANN_MUT()        != null) return new Annotation.Mut();
-        if (ctx.ANN_ASYNC()      != null) return new Annotation.Async();
-        if (ctx.ANN_TEST()       != null) return new Annotation.Test();
-        if (ctx.ANN_DEPRECATED() != null) return new Annotation.Deprecated();
+        if (ctx.ANN_PURE()        != null) return new Annotation.Pure();
+        if (ctx.ANN_IO()          != null) return new Annotation.Io();
+        if (ctx.ANN_MUT()         != null) return new Annotation.Mut();
+        if (ctx.ANN_ASYNC()       != null) return new Annotation.Async();
+        if (ctx.ANN_TEST()        != null) return new Annotation.Test();
+        if (ctx.ANN_DEPRECATED()  != null) return new Annotation.Deprecated();
+        if (ctx.ANN_TOOL()        != null) return new Annotation.Tool();
+        if (ctx.ANN_TRUSTED()     != null) return new Annotation.TrustedAnn();
+        if (ctx.ANN_UNTRUSTED()   != null) return new Annotation.UntrustedAnn();
+        if (ctx.ANN_REQUIRES()    != null) return new Annotation.Requires(buildExpr(ctx.expr()));
+        if (ctx.ANN_ENSURES()     != null) return new Annotation.Ensures(buildExpr(ctx.expr()));
+        if (ctx.ANN_TIMEOUT()     != null) return new Annotation.Timeout(Long.parseLong(ctx.INT_LIT().getText()));
         return new Annotation.Throws(convertTypeRef(ctx.typeRef()));
     }
 
@@ -143,14 +149,27 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
     }
 
     private Stmt buildStmt(AionParser.StmtContext ctx) {
-        if (ctx.letStmt()    != null) return buildLetStmt(ctx.letStmt());
-        if (ctx.mutStmt()    != null) return buildMutStmt(ctx.mutStmt());
-        if (ctx.assignStmt() != null) return buildAssignStmt(ctx.assignStmt());
-        if (ctx.returnStmt() != null) return buildReturnStmt(ctx.returnStmt());
-        if (ctx.ifStmt()     != null) return buildIfStmt(ctx.ifStmt());
-        if (ctx.whileStmt()  != null) return buildWhileStmt(ctx.whileStmt());
-        if (ctx.forStmt()    != null) return buildForStmt(ctx.forStmt());
+        if (ctx.letStmt()      != null) return buildLetStmt(ctx.letStmt());
+        if (ctx.mutStmt()      != null) return buildMutStmt(ctx.mutStmt());
+        if (ctx.assignStmt()   != null) return buildAssignStmt(ctx.assignStmt());
+        if (ctx.returnStmt()   != null) return buildReturnStmt(ctx.returnStmt());
+        if (ctx.ifStmt()       != null) return buildIfStmt(ctx.ifStmt());
+        if (ctx.whileStmt()    != null) return buildWhileStmt(ctx.whileStmt());
+        if (ctx.forStmt()      != null) return buildForStmt(ctx.forStmt());
+        if (ctx.assertStmt()   != null) return buildAssertStmt(ctx.assertStmt());
+        if (ctx.describeStmt() != null) return buildDescribeStmt(ctx.describeStmt());
         return new Stmt.ExprStmt(buildExpr(ctx.exprStmt().expr()), pos(ctx));
+    }
+
+    private Stmt buildAssertStmt(AionParser.AssertStmtContext ctx) {
+        Expr cond = buildExpr(ctx.expr(0));
+        Expr msg  = ctx.expr().size() > 1 ? buildExpr(ctx.expr(1)) : null;
+        return new Stmt.Assert(cond, msg, pos(ctx));
+    }
+
+    private Stmt buildDescribeStmt(AionParser.DescribeStmtContext ctx) {
+        String text = stripQuotes(ctx.STR_LIT().getText());
+        return new Stmt.Describe(text, pos(ctx));
     }
 
     private Stmt buildLetStmt(AionParser.LetStmtContext ctx) {
@@ -313,8 +332,10 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
             case AionParser.BoolFalseContext c -> new Expr.BoolLit(false, pos(c));
             case AionParser.NoneLitContext   c -> new Expr.NoneLit(pos(c));
             case AionParser.SomeLitContext   c -> new Expr.SomeLit(buildExpr(c.expr()), pos(c));
-            case AionParser.OkLitContext     c -> new Expr.OkLit(buildExpr(c.expr()), pos(c));
-            case AionParser.ErrLitContext    c -> new Expr.ErrLit(buildExpr(c.expr()), pos(c));
+            case AionParser.OkLitContext    c -> new Expr.OkLit(buildExpr(c.expr()), pos(c));
+            case AionParser.ErrLitContext   c -> new Expr.ErrLit(buildExpr(c.expr()), pos(c));
+            case AionParser.TrustedExprContext   c -> new Expr.TrustedExpr(buildExpr(c.expr()), pos(c));
+            case AionParser.UntrustedExprContext c -> new Expr.UntrustedExpr(buildExpr(c.expr()), pos(c));
             case AionParser.VarRefContext    c -> new Expr.VarRef(c.IDENT().getText(), pos(c));
             case AionParser.EnumVariantRefContext c ->
                     new Expr.EnumVariantRef(c.TYPE_IDENT(0).getText(), c.TYPE_IDENT(1).getText(), pos(c));
