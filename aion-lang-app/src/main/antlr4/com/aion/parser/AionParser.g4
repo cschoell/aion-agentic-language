@@ -228,8 +228,8 @@ postfixExpr
     ;
 
 postfix
-    : DOT IDENT                                          # FieldAccess
-    | DOT IDENT LPAREN argList? RPAREN                   # MethodCall
+    : DOT IDENT LPAREN argList? RPAREN                   # MethodCall
+    | DOT IDENT                                          # FieldAccess
     | LBRACKET expr RBRACKET                             # IndexAccess
     | QUESTION                                           # PropagateOp   // ? unwrap Result/Option
     ;

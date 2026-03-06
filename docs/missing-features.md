@@ -1,7 +1,7 @@
 # Aion — Missing features for larger systems
 
 > Analysis date: 2026-03-06  
-> Last updated: 2026-03-06 — items 4, 7, 8, 11, 12 implemented.  
+> Last updated: 2026-03-06 — items 4, 7, 8, 11, 12 implemented; items 15–18 added.  
 > Based on: grammar (`AionParser.g4`, `AionLexer.g4`), interpreter, bytecode VM, and `sample.aion`.
 
 Each gap is rated by impact:
@@ -70,20 +70,10 @@ medium-sized system (serialisation, validation, equality, hashing).
 
 ---
 
-## 4. `?` error propagation  🟠
+## 4. `?` error propagation  🟠 ✅ done
 
-**What's there:** The `?` operator (`PropagateOp`) parses and appears in the AST, but the
-interpreter throws `UnsupportedOperationException` on it.
-
-**What's missing:** `?` should unwrap `ok(v)` → `v`, or early-return `err(e)` from the
-enclosing function:
-
-```aion
-let v = safe_divide(10.0, b)?   // returns err(...) immediately if b == 0
-```
-
-**Impact:** Without `?`, every fallible call requires a full `match` block.
-Error handling becomes 5× more verbose and programmers abandon `Result` for silent failures.
+**What's there:** `?` unwraps `ok(v)` / `some(v)` or early-returns `err(e)` / `none` from
+the enclosing function. Caught at the function call boundary.
 
 ---
 
@@ -114,35 +104,17 @@ interpreter, but only for single-level paths on `mut`-bound variables.
 
 ---
 
-## 7. String interpolation  🟡
+## 7. String interpolation  🟡 ✅ done
 
-**What's there:** String concatenation via `+` only.
-
-**What's missing:**
-```aion
-let msg = "Hello, ${name}! You scored ${score} / ${total}."
-```
-
-**Impact:** Producing formatted output requires chained `+ str(x) +` concatenation that
-is noisy, error-prone, and unreadable — especially in diagnostic messages and log strings.
+`"Hello, ${name}! Score: ${score}"` — implemented in lexer, parser, AST, interpreter,
+and bytecode VM.
 
 ---
 
-## 8. `break` / `continue` in loops  🟡
+## 8. `break` / `continue` in loops  🟡 ✅ done
 
-**What's there:** `while` and `for` loop to completion; the only exit is the condition.
-
-**What's missing:**
-```aion
-while true {
-    let line = input()
-    if line == "quit" { break }
-    process(line)
-}
-```
-
-**Impact:** Any loop that needs early exit must use a `mut` flag variable and extra
-conditionals. Common patterns like "read until sentinel" or "find first match" become verbose.
+`break` and `continue` work in both `while` and `for` loops in the interpreter and
+bytecode VM.
 
 ---
 
@@ -176,36 +148,17 @@ pipeline) blocks the whole thread. For an AI-agent language this is particularly
 
 ---
 
-## 11. Pattern guards  🟡
+## 11. Pattern guards  🟡 ✅ done
 
-**What's there:** `match` arms with patterns, but no condition on a pattern.
-
-**What's missing:**
-```aion
-match score {
-    n if n >= 90 => "A",
-    n if n >= 80 => "B",
-    _            => "C",
-}
-```
-
-**Impact:** Ranges and conditional matches require nested `if` inside each arm, making
-match arms verbose and defeating the purpose of exhaustive matching.
+`match n { x if x >= 90 => "A", ... }` — optional `if` guard on any match arm,
+implemented in parser, AST, and interpreter.
 
 ---
 
-## 12. Constant declarations  🟢
+## 12. Constant declarations  🟢 ✅ done
 
-**What's there:** Only `let` (inside functions) and `mut`.
-
-**What's missing:**
-```aion
-const MAX_RETRIES: Int = 3
-const API_BASE: Str = "https://api.example.com"
-```
-
-**Impact:** Magic literals are scattered through code. There is no way to define a
-module-level named constant without a zero-argument function.
+`const MAX: Int = 42` at module level — implemented in lexer, parser, AST, interpreter,
+and bytecode VM.
 
 ---
 
@@ -233,6 +186,146 @@ import std.io.{ read_file as read }
 
 ---
 
+## 15. Semantic / newtype aliases  🟠
+
+**What's there:** `type` declarations create record types; there is no way to make a
+type-safe wrapper around a primitive.
+
+**What's missing:** Lightweight newtypes that carry intent and prevent accidental mixing:
+
+```aion
+type Email  = Str
+type UserId = Int
+type CleanStr = Str
+```
+
+At this level the compiler treats `Email` as a distinct type from `Str` — you cannot pass
+a raw `Str` where an `Email` is expected without an explicit conversion.  This alone
+eliminates whole classes of AI-agent bugs where the LLM passes the wrong string to the
+wrong argument.
+
+**Why it makes sense:** Aion is positioned as an AI-agent language.  Agents see function
+signatures as prompts.  `fn send(to: Email, subject: Str)` is far more informative — and
+harder to misuse — than `fn send(to: Str, subject: Str)`.
+
+**Effort:** Small-Medium — newtypes without constraints are just alias tracking in the
+type-checker; the interpreter can treat them transparently at runtime.
+
+---
+
+## 16. Refinement types  🟠
+
+**What's there:** `@requires` checks pre-conditions at the function boundary; there is no
+way to encode a constraint *into a type* so it is checked wherever a value is created.
+
+**What's missing:** Constrained type declarations:
+
+```aion
+type ValidatedInput = Str where { self.trim().len() > 0 }
+type Score          = Int  where { self >= 0 and self <= 100 }
+type PositiveFloat  = Float where { self > 0.0 }
+```
+
+When a value is assigned to a refinement type (from a `let`, a function argument, or a
+return), the compiler inserts the `where` predicate as a runtime assertion.  The `sanitise`
+tool then becomes:
+
+```aion
+@tool @io @timeout(500)
+fn sanitise(raw: Untrusted[Str]) -> ValidatedInput {
+    describe "Cleans agent input. Fails if input is blank after trimming."
+    return raw.trim()   // compiler checks ValidatedInput constraint here
+}
+```
+
+No manual `assert` needed — the constraint is part of the type contract.
+
+**Why it makes sense:** Refinement types are the natural completion of `@requires`/`@ensures`.
+They let constraints travel with values across module boundaries, something annotations on
+function boundaries cannot do.  For AI agents this is especially powerful because an agent
+can be told "this argument must be a `Score`" and the runtime will enforce it automatically.
+
+**Relationship to #15:** Refinement types build on semantic aliases — a refinement type IS
+a newtype alias plus a `where` clause.  Implement #15 first.
+
+**Effort:** Large — requires constraint propagation through the type system, and a runtime
+check injection pass.
+
+---
+
+## 17. Declarative tool error hints (`@on_fail`)  🟠
+
+**What's there:** When a `@tool` function fails (`@requires` not met, `assert` fires,
+timeout exceeded) the agent receives a raw Java exception message with no guidance on
+how to recover.
+
+**What's missing:** A structured failure annotation that surfaces a human-readable hint
+back to the calling agent:
+
+```aion
+@tool
+@io
+@untrusted
+@timeout(500)
+@on_fail("Please provide a non-empty, non-whitespace string.")
+fn sanitise(raw_input: Str) -> Str {
+    describe "Cleans agent input."
+    let trimmed = raw_input.trim()
+    assert trimmed != "", "Input must not be blank after trimming"
+    return trimmed
+}
+```
+
+When any failure occurs inside an `@on_fail`-annotated tool the runtime wraps the error
+in a structured `ToolError { hint: Str, cause: Str }` value that the agent loop can
+read directly rather than unwrapping a Java stack trace.
+
+**Why it makes sense:** Current `assert` failures produce opaque crashes.  An AI agent
+cannot self-correct from a stack trace.  `@on_fail` is the minimal change needed to make
+tool failures *actionable* — it is the difference between a crashed agent and a retrying
+agent.
+
+**Effort:** Small — one new annotation token, one new `Annotation` record in the AST,
+and a one-line change in the interpreter's tool-call error handler to wrap the message.
+
+---
+
+## 18. Named return variables  🟢
+
+**What's there:** `@ensures` uses the magic name `result` to refer to the return value,
+with no indication of its type or meaning in the signature itself.
+
+**What's missing:** Named return in the function signature so the post-condition is
+self-documenting:
+
+```aion
+@tool
+@pure
+@requires(score >= 0 and score <= total)
+@ensures(next_score >= score and next_score <= total)
+fn award_point(score: Int, total: Int, correct: Bool) -> (next_score: Int) {
+    describe "Increments score if correct. Boundary-checked."
+    return match correct {
+        true  => score + 1,
+        false => score,
+    }
+}
+```
+
+The name `next_score` is bound to the return value inside `@ensures` expressions,
+replacing the magic `result` binding.  This also makes the signature more informative
+for AI agents reading the `describe` output.
+
+**Relationship to #9 (Tuples):** Named returns generalise tuples — `-> (x: Int, y: Int)`
+is a named tuple.  A named single return `-> (n: Int)` is a degenerate case.  Implement
+#9 first, then named returns fall out naturally.
+
+**Effort:** Small-Medium — grammar change (optional name in `returnType`), AST change
+(`Param`-like record instead of bare `TypeRef`), and a one-line change in the `@ensures`
+evaluator to bind the name instead of `result`.
+
+---
+
 ## Summary
 
 | # | Feature | Priority | Effort | Status |
@@ -243,27 +336,36 @@ import std.io.{ read_file as read }
 | 4 | `?` error propagation | 🟠 | Small | ✅ done |
 | 5 | Generic functions (real) | 🟠 | Large | — |
 | 6 | Deep mutable field assignment | 🟠 | Medium | — |
+| 15 | Semantic / newtype aliases | 🟠 | Small-Medium | — |
+| 16 | Refinement types (`where` constraints) | 🟠 | Large | — |
+| 17 | `@on_fail` declarative tool error hints | 🟠 | Small | — |
 | 7 | String interpolation | 🟡 | Small | ✅ done |
 | 8 | `break` / `continue` | 🟡 | Small | ✅ done |
 | 9 | Tuple types | 🟡 | Medium | — |
 | 10 | `@async` / concurrency | 🟡 | Large | — |
 | 11 | Pattern guards | 🟡 | Small | ✅ done |
+| 18 | Named return variables | 🟢 | Small-Medium | — |
 | 12 | `const` declarations | 🟢 | Small | ✅ done |
 | 13 | Selective imports | 🟢 | Small | — |
 | 14 | Numeric literal forms | 🟢 | Small | — |
 
 ## Recommended implementation order
 
-Getting the most leverage with the least effort:
+Sorted by effort within each priority tier, prerequisites noted:
 
 1. ~~`?` error propagation~~ ✅ **done**
 2. ~~`break` / `continue`~~ ✅ **done**
 3. ~~String interpolation~~ ✅ **done**
 4. ~~`const` declarations~~ ✅ **done**
 5. ~~Pattern guards~~ ✅ **done**
-6. Closures / lambdas *(medium effort, unlocks `map`/`filter`/`reduce`)*
-7. Module file loading *(large effort, prerequisite for all multi-file programs)*
-8. Traits *(large effort, prerequisite for generic contracts)*
-9. Generic functions *(large effort, builds on traits)*
-10. `@async` / concurrency *(large effort, needs scheduler)*
-
+6. **`@on_fail` tool hints** *(small — makes agent failures actionable immediately)*
+7. **Semantic / newtype aliases** *(small-medium — prerequisite for refinement types)*
+8. **Named return variables** *(small-medium — builds on tuple syntax, improves `@ensures`)*
+9. **Closures / lambdas** *(medium — unlocks `map`/`filter`/`reduce`)*
+10. **Tuple types** *(medium — prerequisite for named returns and destructuring)*
+11. **Deep field assignment** *(medium — unblocks record mutation patterns)*
+12. **Module file loading** *(large — prerequisite for all multi-file programs)*
+13. **Traits** *(large — prerequisite for generic contracts)*
+14. **Generic functions** *(large — builds on traits)*
+15. **Refinement types** *(large — builds on semantic aliases and traits)*
+16. **`@async` / concurrency** *(large — needs scheduler, best done last)*

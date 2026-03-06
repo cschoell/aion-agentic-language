@@ -1,4 +1,49 @@
-@pure fn main() -> Unit {
-    print(42)
+// ── bytecode-demo.aion ────────────────────────────────────────────────────────
+// Showcases language features that work through the bytecode compiler + VM.
+// Run with: aion-lang-app compile bytecode-demo.aion
+//
+// Features demonstrated:
+//   const          — GREETING, LIMIT
+//   string interp  — "Hello from ${GREETING}!"
+//   break          — exit while loop early
+//   continue       — skip specific iterations
+//   user functions — factorial (recursive)
+
+const GREETING: Str = "Aion bytecode"
+const LIMIT: Int = 4
+
+@pure fn factorial(n: Int) -> Int {
+    if n <= 1 { return 1 }
+    return n * factorial(n - 1)
 }
 
+@pure fn main() -> Unit {
+    // const + string interpolation
+    print("Hello from ${GREETING}!")
+
+    // break: stop once i reaches LIMIT
+    mut i = 0
+    while i < 100 {
+        i = i + 1
+        if i == LIMIT { break }
+    }
+    print("Broke out at i = ${i}")
+
+    // continue: print only odd numbers 1..7
+    mut j = 0
+    while j < 7 {
+        j = j + 1
+        if j == 2 { continue }
+        if j == 4 { continue }
+        if j == 6 { continue }
+        print("odd: ${j}")
+    }
+
+    // recursive user function
+    print("5! = ${factorial(5)}")
+
+    // arithmetic in interpolation
+    let a = 6
+    let b = 7
+    print("${a} * ${b} = ${a * b}")
+}
