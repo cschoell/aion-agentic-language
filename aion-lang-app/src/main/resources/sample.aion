@@ -1,0 +1,155 @@
+// ── Aion sample program ────────────────────────────────────────────────────
+//
+// Demonstrates the core language features:
+//   - type declarations (records)
+//   - enum (sum types)
+//   - fn with effect annotations
+//   - match, Option, Result
+//   - pipeline operator |>
+//   - named arguments
+//   - for / while loops
+//
+
+// ── Types ──────────────────────────────────────────────────────────────────
+
+type Point = {
+    x: Float,
+    y: Float,
+}
+
+type User = {
+    name: Str,
+    age:  Int,
+}
+
+enum Shape {
+    Circle(Float),
+    Rectangle { width: Float, height: Float },
+    Triangle(Float, Float, Float),
+}
+
+enum Color {
+    Red,
+    Green,
+    Blue,
+}
+
+// ── Pure functions ─────────────────────────────────────────────────────────
+
+@pure fn add(a: Int, b: Int) -> Int {
+    return a + b
+}
+
+@pure fn greet(name: Str) -> Str {
+    return "Hello, " + name + "!"
+}
+
+@pure fn area(shape: Shape) -> Float {
+    return match shape {
+        Shape::Circle(r)               => r * r * 3.14159,
+        Shape::Rectangle { width, height } => width * height,
+        Shape::Triangle(a, b, c)       => {
+            let s = (a + b + c) / 2.0
+            let under = s * (s - a) * (s - b) * (s - c)
+            under
+        },
+    }
+}
+
+@pure fn color_name(c: Color) -> Str {
+    return match c {
+        Color::Red   => "red",
+        Color::Green => "green",
+        Color::Blue  => "blue",
+    }
+}
+
+// ── Option / Result usage ──────────────────────────────────────────────────
+
+@pure fn safe_divide(a: Float, b: Float) -> Result[Float, Str] {
+    if b == 0.0 {
+        return err("division by zero")
+    }
+    return ok(a / b)
+}
+
+@pure fn find_user(users: List[User], name: Str) -> Option[User] {
+    for u in users {
+        if u.name == name {
+            return some(u)
+        }
+    }
+    return none
+}
+
+// ── Pipeline usage ─────────────────────────────────────────────────────────
+
+@pure fn double_val(x: Int) -> Int {
+    return x * 2
+}
+
+@pure fn increment(x: Int) -> Int {
+    return x + 1
+}
+
+// ── Entry point ────────────────────────────────────────────────────────────
+
+@io fn main() -> Unit {
+    // Basic arithmetic
+    let result = add(a: 3, b: 4)
+    print(str(result))
+
+    // String operations
+    let msg = greet(name: "Aion")
+    print(msg)
+
+    // Enum + match
+    let c = Shape::Circle(5.0)
+    let r = Shape::Rectangle { width: 4.0, height: 6.0 }
+    print(str(area(shape: c)))
+    print(str(area(shape: r)))
+
+    // Color enum
+    print(color_name(c: Color::Red))
+
+    // Result handling
+    let div_result = safe_divide(a: 10.0, b: 3.0)
+    match div_result {
+        ok(v)  => print("10 / 3 = " + str(v)),
+        err(e) => print("Error: " + e),
+    }
+
+    let div_zero = safe_divide(a: 5.0, b: 0.0)
+    match div_zero {
+        ok(v)  => print(str(v)),
+        err(e) => print("Caught: " + e),
+    }
+
+    // List operations
+    mut numbers = [1, 2, 3, 4, 5]
+    numbers.push(6)
+    print(str(len(numbers)))
+
+    // Pipeline: 3 |> double_val |> increment  ==  7
+    let piped = 3 |> double_val |> increment
+    print(str(piped))
+
+    // For loop
+    mut total = 0
+    for n in numbers {
+        total = total + 1
+    }
+    print("count: " + str(total))
+
+    // User lookup
+    let users = [
+        User { name: "Alice", age: 30 },
+        User { name: "Bob",   age: 25 },
+    ]
+    let found = find_user(users: users, name: "Alice")
+    match found {
+        some(u) => print("Found: " + u.name),
+        none    => print("Not found"),
+    }
+}
+

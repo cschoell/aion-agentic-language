@@ -1,0 +1,4 @@
+@pure fn main() -> Unit {
+    print("hello from bytecode")
+}
+

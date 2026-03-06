@@ -1,0 +1,18 @@
+[versions]
+antlr4         = "4.13.2"
+picocli        = "4.7.6"
+junit-jupiter  = "5.10.3"
+junit-launcher = "1.10.3"
+assertj        = "3.26.3"
+
+[libraries]
+antlr4-runtime  = { module = "org.antlr:antlr4-runtime",                    version.ref = "antlr4" }
+antlr4-tool     = { module = "org.antlr:antlr4",                             version.ref = "antlr4" }
+picocli         = { module = "info.picocli:picocli",                         version.ref = "picocli" }
+junit-jupiter   = { module = "org.junit.jupiter:junit-jupiter",              version.ref = "junit-jupiter" }
+junit-launcher  = { module = "org.junit.platform:junit-platform-launcher",   version.ref = "junit-launcher" }
+assertj         = { module = "org.assertj:assertj-core",                     version.ref = "assertj" }
+
+[plugins]
+antlr4  = { id = "org.antlr.v4",  version.ref = "antlr4" }
+

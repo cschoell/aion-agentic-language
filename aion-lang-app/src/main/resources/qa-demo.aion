@@ -1,0 +1,58 @@
+@io fn main() -> Unit {
+    print("+======================================+")
+    print("|        Aion Quiz  --  3 Questions    |")
+    print("+======================================+")
+    print("")
+
+    mut score = 0
+
+    // Question 1 -- arithmetic
+    print("Q1: What is 2 + 2?")
+    let a1 = input()
+    if a1 == "4" {
+        print("  [CORRECT]")
+        score = score + 1
+    } else {
+        print("  [WRONG]  The answer is 4.")
+    }
+    print("")
+
+    // Question 2 -- capital city
+    print("Q2: What is the capital of France?")
+    let a2 = input()
+    if a2 == "Paris" {
+        print("  [CORRECT]")
+        score = score + 1
+    } else {
+        print("  [WRONG]  The answer is Paris.")
+    }
+    print("")
+
+    // Question 3 -- multiplication
+    print("Q3: What is 7 * 6?")
+    let a3 = input()
+    if a3 == "42" {
+        print("  [CORRECT]")
+        score = score + 1
+    } else {
+        print("  [WRONG]  The answer is 42.")
+    }
+    print("")
+
+    // Final score
+    print("+======================================+")
+    if score == 3 {
+        print("  PERFECT SCORE!  You got 3 / 3.")
+    } else {
+        if score == 2 {
+            print("  Good job!  You got 2 / 3.")
+        } else {
+            if score == 1 {
+                print("  You got 1 / 3.  Keep studying!")
+            } else {
+                print("  You got 0 / 3.  Better luck next time!")
+            }
+        }
+    }
+    print("+======================================+")
+}
