@@ -6,27 +6,51 @@ package com.aion.bytecode;
 public sealed interface Instruction permits
         Instruction.PushInt, Instruction.PushFloat, Instruction.PushStr,
         Instruction.PushBool, Instruction.PushNone,
+        Instruction.PushSome, Instruction.PushOk, Instruction.PushErr,
+        Instruction.PushList, Instruction.PushMap,
+        Instruction.PushEnum, Instruction.PushRecord,
         Instruction.Add, Instruction.Sub, Instruction.Mul, Instruction.Div, Instruction.Mod,
         Instruction.Neg,
         Instruction.Eq, Instruction.Ne, Instruction.Lt, Instruction.Le,
         Instruction.Gt, Instruction.Ge,
         Instruction.And, Instruction.Or, Instruction.Not,
+        Instruction.AndShort, Instruction.OrShort,
         Instruction.Concat,
         Instruction.Store, Instruction.Load,
+        Instruction.GetField, Instruction.GetIndex, Instruction.SetIndex,
+        Instruction.Propagate,
         Instruction.Print, Instruction.ReadLine,
         Instruction.Jump, Instruction.JumpIfFalse, Instruction.JumpIfTrue,
-        Instruction.Call, Instruction.Return, Instruction.Pop,
+        Instruction.JumpIfNone,
+        Instruction.MatchTag, Instruction.MatchInt, Instruction.MatchFloat,
+        Instruction.MatchStr, Instruction.MatchBool, Instruction.MatchNone,
+        Instruction.UnwrapInner,
+        Instruction.Call, Instruction.Return, Instruction.Pop, Instruction.Dup,
         Instruction.CallMethod,
         Instruction.Break, Instruction.Continue, Instruction.Stringify,
         Instruction.Throw,
         Instruction.Halt {
 
     // ── Literals ─────────────────────────────────────────────────────────────
-    record PushInt(long value)    implements Instruction {}
+    record PushInt(long value)     implements Instruction {}
     record PushFloat(double value) implements Instruction {}
-    record PushStr(String value)  implements Instruction {}
+    record PushStr(String value)   implements Instruction {}
     record PushBool(boolean value) implements Instruction {}
-    record PushNone()             implements Instruction {}
+    record PushNone()              implements Instruction {}
+    /** Compile inner expr first, then emit PushSome to wrap TOS. */
+    record PushSome()              implements Instruction {}
+    /** Compile inner expr first, then emit PushOk to wrap TOS. */
+    record PushOk()                implements Instruction {}
+    /** Compile inner expr first, then emit PushErr to wrap TOS. */
+    record PushErr()               implements Instruction {}
+    /** Pop {@code size} values (bottom-of-group pushed first) and build a List. */
+    record PushList(int size)      implements Instruction {}
+    /** Pop {@code size*2} key/value pairs (key0 deepest) and build a Map. */
+    record PushMap(int size)       implements Instruction {}
+    /** Pop {@code arity} payload values and build an EnumVal. */
+    record PushEnum(String typeName, String variant, int arity) implements Instruction {}
+    /** Pop {@code fields.size()} values (last field is TOS) and build a RecordVal. */
+    record PushRecord(String typeName, java.util.List<String> fields) implements Instruction {}
 
     // ── Arithmetic ───────────────────────────────────────────────────────────
     record Add()  implements Instruction {}
@@ -48,55 +72,85 @@ public sealed interface Instruction permits
     record And()  implements Instruction {}
     record Or()   implements Instruction {}
     record Not()  implements Instruction {}
+    /**
+     * Short-circuit AND: peek TOS; if false jump to {@code target} (keep false on stack).
+     * If true, pop and continue evaluating the right operand.
+     */
+    record AndShort(int target) implements Instruction {}
+    /**
+     * Short-circuit OR: peek TOS; if true jump to {@code target} (keep true on stack).
+     * If false, pop and continue evaluating the right operand.
+     */
+    record OrShort(int target)  implements Instruction {}
 
     // ── String ────────────────────────────────────────────────────────────────
-    /** Pop two strings; push their concatenation. */
     record Concat() implements Instruction {}
 
     // ── Variables ─────────────────────────────────────────────────────────────
-    /** Pop top-of-stack and store in named slot. */
     record Store(String name) implements Instruction {}
-    /** Push value of named slot onto stack. */
     record Load(String name)  implements Instruction {}
 
+    // ── Field / index access ─────────────────────────────────────────────────
+    /** Pop receiver; push receiver.fieldName. */
+    record GetField(String field) implements Instruction {}
+    /** Pop index, pop receiver; push receiver[index]. */
+    record GetIndex()             implements Instruction {}
+    /** Pop value, pop index, pop receiver; receiver[index] = value (push nothing). */
+    record SetIndex()             implements Instruction {}
+
+    // ── Option / Result ? propagation ────────────────────────────────────────
+    /**
+     * Implements the {@code ?} operator.
+     * TOS = Ok(v)/Some(v): pop wrapper, push inner v, continue.
+     * TOS = Err(e)/None:   pop, push wrapper back, pop current call frame,
+     *                      restore caller, push wrapper as return value.
+     * {@code epilogueAddr} is the index of the Return instruction that ends
+     * the enclosing function's body (set by the compiler).
+     */
+    record Propagate(int epilogueAddr) implements Instruction {}
+
     // ── I/O ───────────────────────────────────────────────────────────────────
-    /** Pop top-of-stack and print it (with newline). */
     record Print()    implements Instruction {}
-    /** Read one line from stdin; push as String. */
     record ReadLine() implements Instruction {}
 
     // ── Control flow ─────────────────────────────────────────────────────────
-    /** Unconditional jump to instruction index. */
-    record Jump(int target)           implements Instruction {}
-    /** Pop boolean; jump to target if false. */
-    record JumpIfFalse(int target)    implements Instruction {}
-    /** Pop boolean; jump to target if true. */
-    record JumpIfTrue(int target)     implements Instruction {}
+    record Jump(int target)        implements Instruction {}
+    record JumpIfFalse(int target) implements Instruction {}
+    record JumpIfTrue(int target)  implements Instruction {}
+    /** Peek TOS (Option/Result); jump if it is None or Err, leaving the value on stack. */
+    record JumpIfNone(int target)  implements Instruction {}
+
+    // ── Pattern matching ─────────────────────────────────────────────────────
+    /** Peek TOS; if it is an Enum/Option/Result with matching tag — continue. Else jump. */
+    record MatchTag(String typeName, String variant, int failJump) implements Instruction {}
+    /** Peek TOS (must be Long); if != value jump to failJump. */
+    record MatchInt(long value, int failJump)    implements Instruction {}
+    /** Peek TOS (must be Double); if != value jump. */
+    record MatchFloat(double value, int failJump) implements Instruction {}
+    /** Peek TOS (must be String); if not equal jump. */
+    record MatchStr(String value, int failJump)  implements Instruction {}
+    /** Peek TOS (must be Boolean); if != value jump. */
+    record MatchBool(boolean value, int failJump) implements Instruction {}
+    /** Peek TOS; if it is not null (None) jump to failJump. */
+    record MatchNone(int failJump)               implements Instruction {}
     /**
-     * Call a user-defined function.
-     * @param target  entry-point instruction index of the function
-     * @param arity   number of arguments already pushed on the stack (left-to-right)
-     * @param params  parameter names in order, used to populate the new frame's locals
+     * Pop wrapper (Some/Ok/Err/EnumVal) and push its inner payload values
+     * left-to-right (so last payload element ends up as TOS).
      */
+    record UnwrapInner() implements Instruction {}
+
+    // ── Calls ─────────────────────────────────────────────────────────────────
     record Call(int target, int arity, java.util.List<String> params) implements Instruction {}
-    /** Return from a function call — TOS is the return value (or nothing for Unit). */
-    record Return(boolean hasValue)   implements Instruction {}
-    /** Discard top-of-stack (used to drop unused expression results). */
-    record Pop()                      implements Instruction {}
-    /**
-     * Call a built-in method on the receiver.
-     * Stack before: [..., receiver, arg0, arg1, …, argN-1]  (receiver deepest)
-     * Stack after:  [..., result]
-     */
+    record Return(boolean hasValue) implements Instruction {}
+    record Pop()    implements Instruction {}
+    record Dup()    implements Instruction {}
     record CallMethod(String method, int arity) implements Instruction {}
-    /** Pop String message from TOS and throw a runtime error. */
-    record Throw()                    implements Instruction {}
-    /** Temporary placeholder patched to Jump(breakTarget) by the compiler. */
-    record Break()                    implements Instruction {}
-    /** Temporary placeholder patched to Jump(continueTarget) by the compiler. */
-    record Continue()                 implements Instruction {}
-    /** Convert TOS to its string representation and push back. */
-    record Stringify()                implements Instruction {}
+
+    // ── Errors / control signals ──────────────────────────────────────────────
+    record Throw()     implements Instruction {}
+    record Break()     implements Instruction {}
+    record Continue()  implements Instruction {}
+    record Stringify() implements Instruction {}
 
     // ── Meta ──────────────────────────────────────────────────────────────────
     record Halt() implements Instruction {}
