@@ -14,23 +14,31 @@
 - [x] All primitive types: `Int`, `Float`, `Bool`, `Str`, `Unit`
 - [x] Generic built-in types: `Option[T]`, `Result[T,E]`, `List[T]`, `Map[K,V]`
 - [x] Record type declarations (`type Foo = { … }`) and type aliases
+- [x] **Semantic / newtype aliases** — `type Email = Str` registered and enforced at binding sites
+- [x] **Refinement types** — `type Score = Int where { self >= 0 and self <= 100 }`; predicate checked on every `let`/`mut` binding and function parameter
 - [x] Enum (sum type) declarations with tuple and record variants
 - [x] Function declarations with effect annotations (`@pure`, `@io`, `@async`, `@mut`, `@throws`, `@test`, `@deprecated`)
 - [x] Agent-contract annotations: `@tool`, `@requires(expr)`, `@ensures(expr)`, `@untrusted`, `@timeout(ms)` — parsed and stored on `FnDecl`
+- [x] **`@on_fail` declarative tool error hints** — wraps runtime failures as `err(ToolError { hint, cause })` for agent self-correction
 - [x] Immutable bindings (`let`) and mutable bindings (`mut`)
 - [x] Named and positional arguments at call sites
 - [x] `if` / `else if` / `else`
 - [x] `while` and `for … in` loops with `break` and `continue`
+- [x] **Semicolon as inline statement separator** — optional `;` after any statement in a block; trailing semicolons silently ignored
 - [x] Exhaustive `match` with wildcards, literals, bind, pattern guards (`x if cond`), `some`/`ok`/`err`, enum tuple/record, nested patterns
 - [x] Pipeline operator `>>`
 - [x] `?` propagation operator for `Result`/`Option`
 - [x] Block expressions (last expression is the value)
 - [x] Record literals, list literals, map literals
+- [x] **Tuple types** — `(Int, Str, Bool)` anonymous product type; constructable and iterable
+- [x] **Deep mutable field assignment** — `user.address = newAddr`; single-level path on `mut`-bound variables
 - [x] String escape sequences
 - [x] **String interpolation** — `"Hello, ${name}!"` with arbitrary expressions
 - [x] **`const` declarations** — module-level compile-time constants
 - [x] **`describe` statements** — inline doc-comment statements
-- [x] Semantic type alias constraints (`type T = Str where { … }`) — parsed and stored
+- [x] **Range expressions** — `from..to` (exclusive) and `from..=to` (inclusive); evaluates to `List[Int]`; works in `for … in` and as a value
+- [x] **Import resolution** — `parseFileWithImports`: recursive file loading, transitive imports, cycle detection (`import math_utils` works end-to-end)
+- [x] **Selective imports** — `import foo { bar, baz }` syntax; filters to named declarations only; supports functions, consts, types, enums
 
 ### Interpreter (tree-walking)
 - [x] Tree-walking interpreter (all constructs)
@@ -38,6 +46,8 @@
 - [x] Built-in functions: `print`, `str`, `int`, `float`, `len`, `assert`, `is_some`, `is_none`, `is_ok`, `is_err`, `unwrap`, `unwrap_or`
 - [x] Method calls on `List`, `Map`, `Str`
 - [x] First-class functions (`FnVal` with closure capture)
+- [x] **Closures / lambda literals** — `fn(x: Int) -> Int { x * 2 }`; full closure semantics; `list.map(fn)` / `list.filter(fn)` dispatch
+- [x] **Named return variables** — `-> (result: Int)` in function signature; `result` bound in `@ensures` expressions
 - [x] `ReturnSignal` / `PropagateSignal` / `BreakSignal` / `ContinueSignal` for control flow
 - [x] `const` binding at module scope before `main` runs
 
@@ -60,12 +70,12 @@
 - [x] Gradle build with ANTLR4 code generation (`generateAntlr` task)
 - [x] **174 passing unit tests** across 6 suites: `AionLanguageTest` (18), `BytecodeCompilerTest` (40), `InterpreterQaTest` (5), `SmallFeaturesTest` (30), `ModuleImportTest` (12), `ResourceScriptE2ETest` (60)
 - [x] `sample.aion` — full demo program
-- [x] `bytecode-demo.aion` — bytecode-path demo with numeric literal forms
+- [x] `bytecode-demo.aion` — bytecode-path demo with numeric literal forms and range expressions
 - [x] `math_utils.aion` — shared utility module (abs, clamp, isqrt, sum, gcd, low_byte, is_power_of_two)
-- [x] `import-demo.aion` — multi-file import demo with all numeric literal forms
+- [x] `import-demo.aion` — multi-file import demo with all numeric literal forms and selective imports
 
 ### Documentation
-- [x] `docs/missing-features.md` — gap analysis rated by impact (items #1, #13, #14, and #15 implemented)
+- [x] `docs/missing-features.md` — gap analysis rated by impact (items #1–#2, #4, #6–#9, #11–#19 implemented)
 - [x] `docs/Aion Agent Ecosystem Technical Breakdown.md` — A2A protocol, registry, arbitration, researcher-alpha manifest
 - [x] `.github/copilot-instructions.md` — architecture overview, key file map, feature checklist, build commands
 
@@ -75,16 +85,13 @@
 
 - [ ] **Type checker** — infer and verify types for all expressions and statements; catch mismatches before interpretation; enforce `@requires` / `@ensures` at compile time
 - [ ] **Generics at user-defined level** — type-check generic type/enum/fn declarations, not just built-ins
-- [ ] **Closures / lambda literals** — anonymous function expressions: `fn(x: Int) -> Int { x * 2 }`
 - [ ] **Destructuring `let`** — `let { name, age } = user` / `let (a, b) = pair`
-- [ ] **Tuple type** — lightweight anonymous product type `(Int, Str, Bool)` without field names
-- [x] **Range expressions** — `from..to` (exclusive) and `from..=to` (inclusive); evaluates to `List[Int]`; works in `for … in` and as a value
-- [x] **Import resolution** — `parseFileWithImports`: recursive file loading, transitive imports, cycle detection (`import math_utils` works end-to-end)
-- [x] **Selective imports** — `import foo { bar, baz }` syntax; filters to named declarations only; supports functions, consts, types, enums
 - [ ] **Import namespacing / re-export** — explicit namespace prefixes and `export` keyword
 - [ ] **Exhaustiveness checking** — static verification that `match` covers all enum variants
 - [ ] **`@requires` / `@ensures` runtime enforcement** — VM checks pre/post conditions and raises `ConstraintViolation`
 - [ ] **`@timeout` enforcement** — thread interrupt after declared milliseconds
+- [ ] **Refinement type bytecode injection** — emit `CheckConstraint` instruction in the bytecode compiler (currently interpreter-only)
+- [ ] **Traits / interface system** — `trait Display { fn to_str(self) -> Str }`; `impl Trait for Type`; prerequisite for generic contracts
 
 ## 🔲 Planned — Standard library
 
