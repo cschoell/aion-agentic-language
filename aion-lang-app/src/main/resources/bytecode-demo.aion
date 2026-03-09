@@ -3,23 +3,22 @@
 // Run with: aion-lang-app compile bytecode-demo.aion
 //
 // Features demonstrated:
-//   const          — GREETING, LIMIT
-//   string interp  — "Hello from ${GREETING}!"
-//   break          — exit while loop early
-//   continue       — skip specific iterations
-//   user functions — factorial (recursive)
-//   lambda         — fn(x) -> T passed to map / filter
-//   @on_fail       — structured tool error hint (parsed, shown in descriptor)
+//   const, string interp, break, continue, recursion,
+//   lambda (map/filter), @on_fail, tuples, named return,
+//   deep field assignment
 
 const GREETING: Str = "Aion bytecode"
 const LIMIT: Int = 4
 
+// ── Types ──────────────────────────────────────────────────────────────────
+type Counter = { label: Str, value: Int }
+
+// ── Pure functions ─────────────────────────────────────────────────────────
 @pure fn factorial(n: Int) -> Int {
     if n <= 1 { return 1 }
     return n * factorial(n - 1)
 }
 
-// ── Higher-order helpers ──────────────────────────────────────────────────────
 @pure fn square_all(xs: List[Int]) -> List[Int] {
     return xs.map(fn(x: Int) -> Int { return x * x })
 }
@@ -28,7 +27,7 @@ const LIMIT: Int = 4
     return xs.filter(fn(x: Int) -> Bool { return x % 2 == 0 })
 }
 
-// ── @on_fail tool (bytecode path) ─────────────────────────────────────────────
+// ── @on_fail tool ──────────────────────────────────────────────────────────
 @tool
 @pure
 @requires(b != 0)
@@ -38,11 +37,35 @@ fn safe_div(a: Int, b: Int) -> Int {
     return a / b
 }
 
+// ── Tuple: split a list at a threshold ────────────────────────────────────
+@pure fn split_at(xs: List[Int], threshold: Int) -> (Int, Int) {
+    mut lo_count = 0
+    mut hi_count = 0
+    for n in xs {
+        if n <= threshold {
+            lo_count = lo_count + 1
+        } else {
+            hi_count = hi_count + 1
+        }
+    }
+    return (lo_count, hi_count)
+}
+
+// ── Named return with @ensures ─────────────────────────────────────────────
+@pure
+@ensures(clamped >= 0)
+fn abs_clamp(n: Int) -> (clamped: Int) {
+    return match n {
+        x if x < 0 => -x,
+        x           => x,
+    }
+}
+
 @pure fn main() -> Unit {
-    // ── const + string interpolation ──────────────────────────────────────────
+    // -- const + string interpolation --
     print("Hello from ${GREETING}!")
 
-    // ── break: stop once i reaches LIMIT ──────────────────────────────────────
+    // -- break --
     mut i = 0
     while i < 100 {
         i = i + 1
@@ -50,7 +73,7 @@ fn safe_div(a: Int, b: Int) -> Int {
     }
     print("Broke out at i = ${i}")
 
-    // ── continue: print only odd numbers 1..7 ─────────────────────────────────
+    // -- continue: print only odd numbers 1..7 --
     mut j = 0
     while j < 7 {
         j = j + 1
@@ -60,29 +83,42 @@ fn safe_div(a: Int, b: Int) -> Int {
         print("odd: ${j}")
     }
 
-    // ── recursive user function ───────────────────────────────────────────────
+    // -- recursive user function --
     print("5! = ${factorial(5)}")
 
-    // ── arithmetic in interpolation ───────────────────────────────────────────
+    // -- arithmetic in interpolation --
     let a = 6
     let b = 7
     print("${a} * ${b} = ${a * b}")
 
-    // ── lambda: map ───────────────────────────────────────────────────────────
+    // -- lambda: map --
     let nums = [1, 2, 3, 4, 5]
     let squares = square_all(nums)
     print("Squares: ${squares}")
 
-    // ── lambda: filter ────────────────────────────────────────────────────────
+    // -- lambda: filter --
     let evens = only_even(nums)
     print("Evens:   ${evens}")
 
-    // ── inline lambda stored in a variable ────────────────────────────────────
+    // -- inline lambda stored in variable --
     let triple = fn(x: Int) -> Int { return x * 3 }
     let tripled = nums.map(triple)
     print("Tripled: ${tripled}")
 
-    // ── @on_fail tool: valid call succeeds ────────────────────────────────────
+    // -- @on_fail tool --
     let d = safe_div(20, 4)
     print("safe_div(20, 4) = ${d}")
+
+    // -- tuples --
+    let parts = split_at([1, 2, 3, 4, 5, 6], 3)
+    print("split_at([1..6], 3): lo=${parts.first()}, hi=${parts.second()}")
+
+    // -- named return --
+    print("abs_clamp(-7) = ${abs_clamp(-7)}")
+    print("abs_clamp(4)  = ${abs_clamp(4)}")
+
+    // -- deep field assignment --
+    mut ctr = Counter { label: "hits", value: 0 }
+    ctr.value = 42
+    print("counter '${ctr.label}' = ${ctr.value}")
 }

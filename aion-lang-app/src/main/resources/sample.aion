@@ -1,33 +1,27 @@
-// ── Aion sample program ────────────────────────────────────────────────────
-//
-// Demonstrates the core language features:
-//   - type declarations (records) and enums (sum types)
-//   - fn with effect annotations
-//   - match, Option, Result
-//   - pipeline operator |>
-//   - named arguments
-//   - for / while loops
+// sample.aion — Aion language feature showcase
 //
 // Features shown:
-//   const          — PI, MAX_USERS defined at the top
-//   string interp  — "${name}" instead of "Hello, " + name + "!"
-//   pattern guards — classify numbers and shapes by condition
-//   ?              — error propagation with Result
-//   break/continue — early loop control
-//   @on_fail       — structured tool errors for agent loops
-//   refinement type — Tag = Str where constraint enforced on assignment
-//   lambda         — fn(x) -> T used with map / filter
+//   const           — PI, MAX_USERS defined at module level
+//   string interp   — "${name}" instead of "Hello, " + name + "!"
+//   pattern guards  — classify numbers by condition
+//   ?               — error propagation with Result
+//   break/continue  — early loop control
+//   @on_fail        — structured tool errors for agent loops
+//   refinement type — PositiveInt, ShortStr with where constraints
+//   lambda          — fn(x) -> T used with map / filter
+//   tuples          — (Int, Int) return type, construction, access
+//   deep field      — nested record mutation: point.x = ...
+//   named return    — -> (name: Type) in function signature
 
-// ── Constants ─────────────────────────────────────────────────────────────
+// ── Constants ──────────────────────────────────────────────────────────────
 
 const PI: Float = 3.14159
 const MAX_USERS: Int = 10
 
 // ── Refinement types ───────────────────────────────────────────────────────
-// The runtime checks these constraints on every assignment.
 
-type PositiveInt = Int   where { self > 0 }
-type ShortStr    = Str   where { self.len() <= 20 }
+type PositiveInt = Int where { self > 0 }
+type ShortStr    = Str where { self.len() <= 20 }
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -59,22 +53,19 @@ enum Color {
     return a + b
 }
 
-// String interpolation instead of concatenation
 @pure fn greet(name: Str) -> Str {
     return "Hello, ${name}!"
 }
 
-// Pattern guards replace range chains in nested ifs
 @pure fn classify_age(age: Int) -> Str {
     return match age {
-        n if n < 13  => "child",
-        n if n < 18  => "teenager",
-        n if n < 65  => "adult",
-        _            => "senior",
+        n if n < 13 => "child",
+        n if n < 18 => "teenager",
+        n if n < 65 => "adult",
+        _           => "senior",
     }
 }
 
-// const PI used directly in expression
 @pure fn area(shape: Shape) -> Float {
     return match shape {
         Shape::Circle(r)                   => r * r * PI,
@@ -95,16 +86,13 @@ enum Color {
     }
 }
 
-// ── Option / Result usage ──────────────────────────────────────────────────
+// ── Option / Result ────────────────────────────────────────────────────────
 
 @pure fn safe_divide(a: Float, b: Float) -> Result[Float, Str] {
-    if b == 0.0 {
-        return err("division by zero")
-    }
+    if b == 0.0 { return err("division by zero") }
     return ok(a / b)
 }
 
-// ? propagation: if safe_divide returns err, ratio_str returns it immediately
 @pure fn ratio_str(a: Float, b: Float) -> Result[Str, Str] {
     let v = safe_divide(a, b)?
     return ok("${a} / ${b} = ${v}")
@@ -112,15 +100,13 @@ enum Color {
 
 @pure fn find_user(users: List[User], name: Str) -> Option[User] {
     for u in users {
-        if u.name == name {
-            return some(u)
-        }
+        if u.name == name { return some(u) }
     }
     return none
 }
 
-// ── Tool function with @on_fail ────────────────────────────────────────────
-// If score < 0 or score > max, the agent gets a structured error instead of a crash.
+// ── @on_fail tool ──────────────────────────────────────────────────────────
+
 @tool
 @pure
 @requires(score >= 0)
@@ -131,14 +117,12 @@ fn clamp_score(score: Int, max: Int) -> Int {
     return score
 }
 
-// ── Lambda / higher-order helpers ─────────────────────────────────────────
+// ── Lambda / higher-order ──────────────────────────────────────────────────
 
-// square each element — lambda passed to map
 @pure fn square_all(xs: List[Int]) -> List[Int] {
     return xs.map(fn(x: Int) -> Int { return x * x })
 }
 
-// keep only elements above a threshold — lambda passed to filter
 @pure fn above(xs: List[Int], threshold: Int) -> List[Int] {
     return xs.filter(fn(x: Int) -> Bool { return x > threshold })
 }
@@ -148,6 +132,30 @@ fn clamp_score(score: Int, max: Int) -> Int {
 @pure fn double_val(x: Int) -> Int { return x * 2 }
 @pure fn increment(x: Int)  -> Int { return x + 1 }
 
+// ── Tuples: return a (min, max) pair ──────────────────────────────────────
+
+@pure fn min_max(xs: List[Int]) -> (Int, Int) {
+    mut lo = 999999
+    mut hi = -999999
+    for n in xs {
+        if n < lo { lo = n }
+        if n > hi { hi = n }
+    }
+    return (lo, hi)
+}
+
+// ── Named return: @ensures uses the bound name ────────────────────────────
+
+@pure
+@ensures(next_score >= score)
+fn award_point(score: Int, correct: Bool) -> (next_score: Int) {
+    describe "Increments score when answer is correct."
+    return match correct {
+        true  => score + 1,
+        false => score,
+    }
+}
+
 // ── Entry point ────────────────────────────────────────────────────────────
 
 @io fn main() -> Unit {
@@ -155,16 +163,10 @@ fn clamp_score(score: Int, max: Int) -> Int {
     // -- Basic arithmetic with string interpolation --
     let result = add(a: 3, b: 4)
     print("3 + 4 = ${result}")
-
-    // -- Greeting using interp --
     let msg = greet(name: "Aion")
     print(msg)
-
-    // -- Pattern guard: age classification --
     print("Age 10 is a ${classify_age(10)}")
-    print("Age 16 is a ${classify_age(16)}")
     print("Age 35 is an ${classify_age(35)}")
-    print("Age 70 is a ${classify_age(70)}")
     print("")
 
     // -- Enum + match with const PI --
@@ -172,7 +174,7 @@ fn clamp_score(score: Int, max: Int) -> Int {
     let r = Shape::Rectangle { width: 4.0, height: 6.0 }
     print("Circle area:    ${area(shape: c)}")
     print("Rectangle area: ${area(shape: r)}")
-    print("Favourite color: ${color_name(c: Color::Red)}")
+    print("Colour: ${color_name(c: Color::Red)}")
     print("")
 
     // -- Result with ? propagation --
@@ -187,10 +189,8 @@ fn clamp_score(score: Int, max: Int) -> Int {
     print("")
 
     // -- Refinement types --
-    // PositiveInt constraint: any assignment of a non-positive value would fail
     let p: PositiveInt = 42
     print("PositiveInt p = ${p}")
-    // ShortStr constraint: strings up to 20 chars are accepted
     let tag: ShortStr = "aion-agent-v1"
     print("ShortStr tag  = ${tag}")
     print("")
@@ -201,23 +201,39 @@ fn clamp_score(score: Int, max: Int) -> Int {
     print("Squares:   ${squares}")
     let big = above(nums, 3)
     print("Above 3:   ${big}")
-
-    // inline lambda stored in a variable and called directly
     let triple = fn(x: Int) -> Int { return x * 3 }
     let tripled = nums.map(triple)
     print("Tripled:   ${tripled}")
     print("")
 
-    // -- @on_fail tool: valid call succeeds --
+    // -- Tuples --
+    let bounds = min_max([3, 1, 4, 1, 5, 9, 2, 6])
+    print("min = ${bounds.first()}, max = ${bounds.second()}")
+    let coord = (10, 20)
+    print("coord len = ${coord.len()}")
+    print("")
+
+    // -- Named return (@ensures next_score >= score) --
+    let s0 = award_point(5, true)
+    let s1 = award_point(s0, false)
+    print("award_point: 5 + correct = ${s0}, then wrong = ${s1}")
+    print("")
+
+    // -- Deep field assignment --
+    mut origin = Point { x: 0.0, y: 0.0 }
+    origin.x = 3.0
+    origin.y = 4.0
+    print("point after mutation: x=${origin.x}, y=${origin.y}")
+    print("")
+
+    // -- @on_fail tool --
     let cs = clamp_score(7, 10)
     print("clamp_score(7, 10) = ${cs}")
     print("")
 
-    // -- List + break + continue --
+    // -- Loop with break + continue --
     mut numbers = [1, 2, 3, 4, 5]
     numbers.push(6)
-
-    // Sum only even numbers; stop if we see a number > 5
     mut even_sum = 0
     for n in numbers {
         if n > 5 { break }
@@ -225,23 +241,12 @@ fn clamp_score(score: Int, max: Int) -> Int {
         if n == 2 { even_sum = even_sum + n }
         if n == 4 { even_sum = even_sum + n }
     }
-    print("Even sum (2+4, skipping 3, stopping at 6): ${even_sum}")
-
-    // -- Pipeline: 3 |> double_val |> increment == 7 --
+    print("Even sum (2+4, skip 3, stop at 6): ${even_sum}")
     let piped = 3 |> double_val |> increment
     print("Pipeline 3 |> double |> inc = ${piped}")
     print("")
 
-    // -- While loop with MAX_USERS const --
-    mut count = 0
-    while count < MAX_USERS {
-        count = count + 1
-        if count == 3 { break }
-    }
-    print("Counted to ${count} (limit was ${MAX_USERS})")
-    print("")
-
-    // -- User lookup with interp in match arms --
+    // -- User lookup --
     let users = [
         User { name: "Alice", age: 30 },
         User { name: "Bob",   age: 25 },
@@ -255,4 +260,3 @@ fn clamp_score(score: Int, max: Int) -> Int {
         none    => print("Eve not found"),
     }
 }
-

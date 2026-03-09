@@ -20,15 +20,22 @@
 //   @on_fail       — structured error hints for agent self-correction
 //   refinement type — Score = Int where { self >= 0 and self <= TOTAL }
 //   lambda         — fn(a: Str) -> Str passed to normalise answers
+//
+// Tuples and records demonstrate compound data:
+//   (Int, Int)     — quiz_result tuple for score and total
+//   { ... }        — QuizStats record tracks attempts and correct answers
 
 const TOTAL: Int = 3
 const BORDER: Str = "+======================================+"
 
-// ── Refinement type: Score is always in [0, TOTAL] ───────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────
+type QuizStats = { attempts: Int, correct: Int }
+
+// ── Refinement type: Score always in [0, TOTAL] ────────────────────────────
 // The runtime checks this constraint on every assignment.
 type Score = Int where { self >= 0 and self <= 3 }
 
-// ── Arithmetic tool ───────────────────────────────────────────────────────────
+// ── Arithmetic tool ────────────────────────────────────────────────────────
 @tool
 @pure
 @requires(b != 0)
@@ -39,7 +46,7 @@ fn safe_div(a: Int, b: Int) -> Int {
     return a / b
 }
 
-// ── String sanitiser tool ─────────────────────────────────────────────────────
+// ── String sanitiser tool ──────────────────────────────────────────────────
 @tool
 @io
 @untrusted
@@ -47,30 +54,28 @@ fn safe_div(a: Int, b: Int) -> Int {
 @requires(raw_input != "")
 @on_fail("Input was empty or blank. Please provide a non-whitespace string.")
 fn sanitise(raw_input: Str) -> Str {
-    describe "Trims whitespace from agent-supplied input and validates it is non-empty."
+    describe "Trims whitespace from agent-supplied input."
     let trimmed = raw_input.trim()
     assert trimmed != "", "Input must not be blank after trimming"
     return trimmed
 }
 
-// ── Scoring tool ──────────────────────────────────────────────────────────────
+// ── Scoring tool — named return so @ensures is self-documenting ─────────────
 @tool
 @pure
 @requires(score >= 0)
 @requires(score <= total)
-@ensures(result >= 0)
-@ensures(result <= total)
+@ensures(next_score >= 0)
+@ensures(next_score <= total)
 @on_fail("Score out of range. score must be in [0, total].")
-fn award_point(score: Int, total: Int, correct: Bool) -> Int {
-    describe "Awards one point when correct is true. Score must be in [0, total]."
+fn award_point(score: Int, total: Int, correct: Bool) -> (next_score: Int) {
+    describe "Awards one point when correct is true."
     if correct { return score + 1 }
     return score
 }
 
-// ── Answer normaliser — uses a lambda to trim and lowercase in one pass ───────
-// Demonstrates passing fn(...) as a value to a helper.
+// ── Answer normaliser — lambda pipeline ────────────────────────────────────
 @pure fn normalise(answer: Str) -> Str {
-    // build a pipeline: trim whitespace, then lowercase
     let steps = [
         fn(s: Str) -> Str { return s.trim() },
         fn(s: Str) -> Str { return s.lower() },
@@ -82,7 +87,7 @@ fn award_point(score: Int, total: Int, correct: Bool) -> Int {
     return out
 }
 
-// ── Verdict helper — pattern guards replace nested ifs ───────────────────────
+// ── Verdict helper — pattern guards ───────────────────────────────────────
 @pure fn verdict(score: Int) -> Str {
     return match score {
         n if n == TOTAL => "PERFECT SCORE!  You got ${n} / ${TOTAL}.",
@@ -92,7 +97,12 @@ fn award_point(score: Int, total: Int, correct: Bool) -> Int {
     }
 }
 
-// ── Main: interactive quiz ────────────────────────────────────────────────────
+// ── Return quiz result as a tuple ────────────────────────────────────────────
+@pure fn quiz_result(score: Int, total: Int) -> (Int, Int) {
+    return (score, total)
+}
+
+// ── Main: interactive quiz ─────────────────────────────────────────────────
 @io fn main() -> Unit {
     print(BORDER)
     print("|   Aion Agent-Safe Quiz  (mode: interp)|")
@@ -101,24 +111,23 @@ fn award_point(score: Int, total: Int, correct: Bool) -> Int {
     print("Type 'quit' at any question to exit early.")
     print("")
 
-    // Score is a refinement type: runtime enforces 0 <= score <= 3
     mut score: Score = 0
     mut done = false
+
+    // Deep field assignment — track attempts/correct counts in a record
+    mut stats = QuizStats { attempts: 0, correct: 0 }
 
     // ── Q1 — safe_div sanity-check ────────────────────────────────────────────
     while not done {
         print("Q1: What is 10 / 2?")
         let a1 = sanitise(input())
-        if normalise(a1) == "quit" {
-            done = true
-            break
-        }
-        // safe_div has @on_fail: if b were 0 it would return err(ToolError{...})
-        // Here b=2 so it succeeds and returns a plain Int.
+        if normalise(a1) == "quit" { done = true; break }
         let v1 = safe_div(10, 2)
         assert v1 == 5, "safe_div sanity check"
+        stats.attempts = stats.attempts + 1
         if normalise(a1) == "5" {
             score = award_point(score, TOTAL, true)
+            stats.correct = stats.correct + 1
             print("  [CORRECT]  (verified via safe_div: ${v1})")
         } else {
             score = award_point(score, TOTAL, false)
@@ -132,12 +141,11 @@ fn award_point(score: Int, total: Int, correct: Bool) -> Int {
     while not done {
         print("Q2: What is the capital of France?")
         let a2 = sanitise(input())
-        if normalise(a2) == "quit" {
-            done = true
-            break
-        }
+        if normalise(a2) == "quit" { done = true; break }
+        stats.attempts = stats.attempts + 1
         if normalise(a2) == "paris" {
             score = award_point(score, TOTAL, true)
+            stats.correct = stats.correct + 1
             print("  [CORRECT]")
         } else {
             score = award_point(score, TOTAL, false)
@@ -151,12 +159,11 @@ fn award_point(score: Int, total: Int, correct: Bool) -> Int {
     while not done {
         print("Q3: What is 7 * 6?")
         let a3 = sanitise(input())
-        if normalise(a3) == "quit" {
-            done = true
-            break
-        }
+        if normalise(a3) == "quit" { done = true; break }
+        stats.attempts = stats.attempts + 1
         if normalise(a3) == "42" {
             score = award_point(score, TOTAL, true)
+            stats.correct = stats.correct + 1
             print("  [CORRECT]")
         } else {
             score = award_point(score, TOTAL, false)
@@ -167,8 +174,9 @@ fn award_point(score: Int, total: Int, correct: Bool) -> Int {
     }
 
     if not done {
+        let res = quiz_result(score, TOTAL)
         print(BORDER)
-        print("  ${verdict(score)}")
+        print("  ${verdict(res.first())}")
         print(BORDER)
     }
 }

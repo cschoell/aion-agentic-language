@@ -7,6 +7,8 @@
 //   string interp    — "Score: ${score} / ${TOTAL}" instead of + concatenation
 //   pattern guards   — match score { n if n == TOTAL => ... } for result message
 //   break            — clean loop exit when user types "quit"
+//   tuples            — score tracked as (correct, total) pair
+//   named return      — award_point uses -> (next_score: Int)
 
 const TOTAL: Int = 3
 const BORDER: Str = "+======================================+"
@@ -19,6 +21,13 @@ const BORDER: Str = "+======================================+"
     return "wrong: ${expected}"
 }
 
+// Named return: @ensures guarantees the score never decreases.
+@pure
+@ensures(next_score >= score and next_score <= TOTAL)
+fn award_point(score: Int) -> (next_score: Int) {
+    return score + 1
+}
+
 // Render the final verdict using a pattern guard match.
 @pure fn verdict(score: Int) -> Str {
     return match score {
@@ -27,6 +36,11 @@ const BORDER: Str = "+======================================+"
         n if n == 1     => "You got 1 / ${TOTAL}. Keep studying!",
         _               => "You got 0 / ${TOTAL}. Better luck next time!",
     }
+}
+
+// Return a (score, total) summary tuple.
+@pure fn summary(score: Int, total: Int) -> (Int, Int) {
+    return (score, total)
 }
 
 @io fn main() -> Unit {
@@ -47,7 +61,7 @@ const BORDER: Str = "+======================================+"
     if running {
         let r1 = check(a1, "4")
         if r1 == "correct" {
-            score = score + 1
+            score = award_point(score)
             print("  [CORRECT]")
         } else {
             print("  [WRONG]  The answer is 4.")
@@ -63,7 +77,7 @@ const BORDER: Str = "+======================================+"
         if running {
             let r2 = check(a2, "Paris")
             if r2 == "correct" {
-                score = score + 1
+                score = award_point(score)
                 print("  [CORRECT]")
             } else {
                 print("  [WRONG]  The answer is Paris.")
@@ -80,7 +94,7 @@ const BORDER: Str = "+======================================+"
         if running {
             let r3 = check(a3, "42")
             if r3 == "correct" {
-                score = score + 1
+                score = award_point(score)
                 print("  [CORRECT]")
             } else {
                 print("  [WRONG]  The answer is 42.")
@@ -89,8 +103,9 @@ const BORDER: Str = "+======================================+"
         }
     }
 
-    // Result
+    // Result — use summary tuple
+    let s = summary(score, TOTAL)
     print(BORDER)
-    print("  ${verdict(score)}")
+    print("  ${verdict(s.first())}")
     print(BORDER)
 }

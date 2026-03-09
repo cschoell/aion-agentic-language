@@ -11,6 +11,9 @@ const VERSION: Int = 1
 type Positive = Int where { self > 0 }
 type Tag      = Str where { self.len() <= 16 }
 
+// ── Types ──────────────────────────────────────────────────────────────────
+type Vec2 = { x: Float, y: Float }
+
 // ── @on_fail tool ─────────────────────────────────────────────────────────────
 @tool
 @pure
@@ -38,9 +41,27 @@ fn divide(a: Int, b: Int) -> Int {
     }
 }
 
+// ── Tuple: min and max of a list ───────────────────────────────────────────
+@pure fn range(xs: List[Int]) -> (Int, Int) {
+    mut lo = 999999
+    mut hi = -999999
+    for n in xs {
+        if n < lo { lo = n }
+        if n > hi { hi = n }
+    }
+    return (lo, hi)
+}
+
+// ── Named return with @ensures ─────────────────────────────────────────────
+@pure
+@ensures(scaled >= 0)
+fn scale_score(raw: Int, factor: Int) -> (scaled: Int) {
+    return raw * factor
+}
+
 @pure fn main() -> Unit {
     // -- greeting --
-    print("Hello from Aion v1!")
+    print("Hello from ${LANG} v${VERSION}!")
     print("")
 
     // -- refinement types --
@@ -67,4 +88,20 @@ fn divide(a: Int, b: Int) -> Int {
         print(fizzbuzz(i))
         i = i + 1
     }
+
+    // -- tuples --
+    let r = range([4, 2, 7, 1, 9, 3])
+    print("range: min=${r.first()}, max=${r.second()}")
+    print("")
+
+    // -- named return --
+    let sc = scale_score(8, 10)
+    print("scale_score(8, 10) = ${sc}")
+    print("")
+
+    // -- deep field assignment --
+    mut v = Vec2 { x: 0.0, y: 0.0 }
+    v.x = 1.5
+    v.y = 2.5
+    print("Vec2 after set: (${v.x}, ${v.y})")
 }
