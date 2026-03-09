@@ -86,6 +86,23 @@ public final class Interpreter {
     // ── Function call ─────────────────────────────────────────────────────────
 
     private AionValue callFn(AionValue.FnVal fn, List<AionValue> args) {
+        // Async functions: run on a virtual thread and return a FutureVal immediately
+        if (fn.decl().isAsync()) {
+            java.util.concurrent.CompletableFuture<AionValue> future =
+                    new java.util.concurrent.CompletableFuture<>();
+            Thread.ofVirtual().start(() -> {
+                try {
+                    future.complete(callFnSync(fn, args));
+                } catch (Exception ex) {
+                    future.completeExceptionally(ex);
+                }
+            });
+            return new AionValue.FutureVal(future);
+        }
+        return callFnSync(fn, args);
+    }
+
+    private AionValue callFnSync(AionValue.FnVal fn, List<AionValue> args) {
         Environment env = fn.closure().child();
         List<Param> params = fn.decl().params();
         if (params.size() != args.size()) {
@@ -142,8 +159,7 @@ public final class Interpreter {
             if (timeoutMs > 0) {
                 result = runWithTimeout(fn, env, timeoutMs);
             } else {
-                execBlock(fn.decl().body(), env);
-                result = new AionValue.UnitVal();
+                result = execBlockWithImplicitReturn(fn.decl().body(), env);
             }
         } catch (ReturnSignal r) {
             result = r.value;
@@ -198,6 +214,17 @@ public final class Interpreter {
 
     private void execBlock(Stmt.Block block, Environment env) {
         for (Stmt s : block.stmts()) execStmt(s, env);
+    }
+
+    /** Like execBlock but treats a trailing ExprStmt as an implicit return value. */
+    private AionValue execBlockWithImplicitReturn(Stmt.Block block, Environment env) {
+        List<Stmt> stmts = block.stmts();
+        if (!stmts.isEmpty() && stmts.getLast() instanceof Stmt.ExprStmt es) {
+            for (int i = 0; i < stmts.size() - 1; i++) execStmt(stmts.get(i), env);
+            return evalExpr(es.expr(), env);
+        }
+        execBlock(block, env);
+        return new AionValue.UnitVal();
     }
 
     private void execStmt(Stmt stmt, Environment env) {
@@ -440,9 +467,17 @@ public final class Interpreter {
             case Expr.Lambda e -> {
                 // Wrap the lambda as an anonymous FnDecl and capture the current environment
                 FnDecl synth = new FnDecl(
-                        List.of(), "__lambda__", List.of(),
+                        List.of(), false, "__lambda__", List.of(), Map.of(),
                         e.params(), e.returnType(), null, e.body(), e.pos());
                 yield new AionValue.FnVal(synth, env);
+            }
+            case Expr.Await e -> {
+                AionValue inner = evalExpr(e.inner(), env);
+                if (inner instanceof AionValue.FutureVal fv) {
+                    yield fv.future().join();
+                }
+                // If already resolved (non-future), return as-is
+                yield inner;
             }
             case Expr.RangeLit e -> {
                 long from = ((AionValue.IntVal) evalExpr(e.from(), env)).value();

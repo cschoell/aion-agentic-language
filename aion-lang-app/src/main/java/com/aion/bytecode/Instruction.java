@@ -35,6 +35,8 @@ public sealed interface Instruction permits
         Instruction.MakeRange,
         Instruction.DestructureRecord, Instruction.DestructureTuple,
         Instruction.CheckConstraint,
+        Instruction.MakeAsync,
+        Instruction.AwaitFuture,
         Instruction.Halt {
 
     // ── Literals ─────────────────────────────────────────────────────────────
@@ -194,6 +196,10 @@ public sealed interface Instruction permits
     // ── Range ─────────────────────────────────────────────────────────────────
     /** Pop to (TOS) and from (TOS-1); push a ListVal of integers [from..to). inclusive=true → [from..=to]. */
     record MakeRange(boolean inclusive) implements Instruction {}
+    /** Call a function asynchronously: pops address+args, returns a FutureVal on the stack. */
+    record MakeAsync(int address, int arity, java.util.List<String> params) implements Instruction {}
+    /** Await a FutureVal on TOS: blocks until complete and pushes the result. */
+    record AwaitFuture() implements Instruction {}
 
     // ── Destructuring ─────────────────────────────────────────────────────────
     /** Pop a RecordVal from TOS; store each named field into the named variable. */

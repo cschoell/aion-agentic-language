@@ -4,6 +4,7 @@ import com.aion.ast.Node;
 import com.aion.ast.Node.*;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Aion runtime value — a sealed type so the interpreter's pattern matches
@@ -24,7 +25,8 @@ public sealed interface AionValue permits
         AionValue.RecordVal,
         AionValue.EnumVal,
         AionValue.TupleVal,
-        AionValue.FnVal {
+        AionValue.FnVal,
+        AionValue.FutureVal {
 
     record IntVal(long value)           implements AionValue { public String toString() { return String.valueOf(value); } }
     record FloatVal(double value)       implements AionValue { public String toString() { return String.valueOf(value); } }
@@ -61,6 +63,10 @@ public sealed interface AionValue permits
     }
     record FnVal(FnDecl decl, Environment closure) implements AionValue {
         public String toString() { return "<fn " + decl.name() + ">"; }
+    }
+    /** A Future[T] value backed by a Java CompletableFuture — result of an async fn call. */
+    record FutureVal(CompletableFuture<AionValue> future) implements AionValue {
+        public String toString() { return future.isDone() ? "Future(" + future.join() + ")" : "Future(<pending>)"; }
     }
 }
 

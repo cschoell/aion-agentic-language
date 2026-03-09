@@ -232,6 +232,11 @@ public class BytecodeVM {
             }
             case Instruction.Return r -> {
                 Object retVal = r.hasValue() ? stack.pop() : null;
+                if (frames.isEmpty()) {
+                    // Top-level return (e.g. async VM entry): push result and halt
+                    if (r.hasValue()) stack.push(retVal == null ? new NoneVal() : retVal);
+                    return total; // signal halt
+                }
                 Frame frame = frames.pop();
                 locals = frame.locals();
                 // Always push the return value when hasValue=true, even if it is null (none).
@@ -301,6 +306,50 @@ public class BytecodeVM {
                 ArrayList<Object> elems = new ArrayList<>();
                 for (long i = from; i < end; i++) elems.add(i);
                 stack.push(new ListVal(elems));
+            }
+
+            // ── Async ─────────────────────────────────────────────────────────
+            case Instruction.MakeAsync ma -> {
+                // Pop args (last arg is TOS)
+                Object[] args = new Object[ma.arity()];
+                for (int i = ma.arity() - 1; i >= 0; i--) args[i] = stack.pop();
+                // Snapshot shared state needed by the async call
+                final List<Instruction> asyncInstrs = currentBytecode;
+                final Map<String, Bytecode.ImplMethodEntry> asyncImpl = implMethods;
+                final int asyncAddr = ma.address();
+                final List<String> asyncParams = ma.params();
+                final Object[] asyncArgs = args;
+                java.util.concurrent.CompletableFuture<Object> future =
+                        new java.util.concurrent.CompletableFuture<>();
+                Thread.ofVirtual().start(() -> {
+                    try {
+                        BytecodeVM asyncVm = new BytecodeVM();
+                        Bytecode asyncBytecode = new Bytecode(asyncInstrs, asyncImpl);
+                        asyncVm.currentBytecode = asyncInstrs;
+                        asyncVm.implMethods = asyncImpl;
+                        // Set up locals for the async function
+                        for (int i = 0; i < asyncParams.size(); i++)
+                            asyncVm.locals.put(asyncParams.get(i), asyncArgs[i]);
+                        // Run from the function address
+                        int aip = asyncAddr;
+                        while (aip < asyncInstrs.size()) {
+                            aip = asyncVm.execute(asyncInstrs.get(aip), aip, asyncInstrs.size());
+                        }
+                        Object result = asyncVm.stack.isEmpty() ? null : asyncVm.stack.peek();
+                        future.complete(result);
+                    } catch (Exception ex) {
+                        future.completeExceptionally(ex);
+                    }
+                });
+                stack.push(new VmValue.FutureVal(future));
+            }
+            case Instruction.AwaitFuture ignored -> {
+                Object top = stack.pop();
+                if (top instanceof VmValue.FutureVal fv) {
+                    stack.push(fv.future().join());
+                } else {
+                    stack.push(top); // already resolved
+                }
             }
 
             // ── Destructuring ─────────────────────────────────────────────────

@@ -97,10 +97,22 @@ public class BytecodeCompiler {
         patchForwardCalls(name);
         int bodyStart = out.size();
         emitParamConstraints(fn);
-        compileBlock(fn.body());
-        int epilogueIdx = out.size();
-        emit(new Instruction.Return(false));
-        patchPropagates(bodyStart, epilogueIdx);
+        // If the last statement is a bare expression, compile it as a return value
+        List<Stmt> stmts = fn.body().stmts();
+        boolean implicitReturn = !stmts.isEmpty() && stmts.getLast() instanceof Stmt.ExprStmt;
+        if (implicitReturn) {
+            // compile all but last as normal stmts
+            for (int i = 0; i < stmts.size() - 1; i++) compileStmt(stmts.get(i));
+            compileExpr(((Stmt.ExprStmt) stmts.getLast()).expr());
+            int epilogueIdx = out.size();
+            emit(new Instruction.Return(true));
+            patchPropagates(bodyStart, epilogueIdx);
+        } else {
+            compileBlock(fn.body());
+            int epilogueIdx = out.size();
+            emit(new Instruction.Return(false));
+            patchPropagates(bodyStart, epilogueIdx);
+        }
     }
 
     private void compileFnBody(FnDecl fn) {
@@ -433,6 +445,10 @@ public class BytecodeCompiler {
                 compileExpr(e.to());
                 emit(new Instruction.MakeRange(e.inclusive()));
             }
+            case Expr.Await e -> {
+                compileExpr(e.inner());
+                emit(new Instruction.AwaitFuture());
+            }
         }
     }
 
@@ -758,7 +774,16 @@ public class BytecodeCompiler {
 
                 List<String> params = fn.params().stream().map(Param::name).toList();
                 Integer addr = fnAddrs.get(call.name());
-                if (addr != null) {
+                if (fn.isAsync()) {
+                    // Async function: emit MakeAsync which returns a FutureVal
+                    int resolvedAddr = addr != null ? addr : 0;
+                    emit(new Instruction.MakeAsync(resolvedAddr, call.args().size(), params));
+                    if (addr == null) {
+                        // patch later when address is known
+                        int idx = out.size() - 1;
+                        forwardCalls.computeIfAbsent(call.name(), k -> new ArrayList<>()).add(idx);
+                    }
+                } else if (addr != null) {
                     emit(new Instruction.Call(addr, call.args().size(), params));
                 } else {
                     int idx = emitPlaceholder(new Instruction.Call(0, call.args().size(), params));
@@ -798,7 +823,7 @@ public class BytecodeCompiler {
         String name = "__lambda_" + (lambdaCounter++) + "__";
         List<String> params = e.params().stream().map(Param::name).toList();
         FnDecl synth = new FnDecl(
-                List.of(), name, List.of(), e.params(), e.returnType(), null, e.body(), e.pos());
+                List.of(), false, name, List.of(), java.util.Collections.emptyMap(), e.params(), e.returnType(), null, e.body(), e.pos());
         fnDecls.put(name, synth);
 
         // Jump past the lambda body (it will be emitted inline here)
@@ -825,8 +850,16 @@ public class BytecodeCompiler {
         FnDecl fn = fnDecls.get(fnName);
         List<String> params = fn.params().stream().map(Param::name).toList();
         int addr = fnAddrs.get(fnName);
-        for (int idx : pending)
-            patch(idx, new Instruction.Call(addr, fn.params().size(), params));
+        for (int idx : pending) {
+            if (fn.isAsync()) {
+                Instruction existing = out.get(idx);
+                int arity = existing instanceof Instruction.MakeAsync ma ? ma.arity()
+                          : existing instanceof Instruction.Call c ? c.arity() : fn.params().size();
+                patch(idx, new Instruction.MakeAsync(addr, arity, params));
+            } else {
+                patch(idx, new Instruction.Call(addr, fn.params().size(), params));
+            }
+        }
     }
 
     // ── Utilities ─────────────────────────────────────────────────────────────

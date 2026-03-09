@@ -9,7 +9,9 @@
 //   hex / binary / octal literals, underscore digit separators,
 //   range expressions (.. exclusive, ..= inclusive),
 //   destructuring let (record + tuple), for-tuple-destructure,
-//   refinement types (CheckConstraint bytecode injection)
+//   refinement types (CheckConstraint bytecode injection),
+//   generic functions (type-erased, T / T: Trait syntax),
+//   async fn + await (virtual-thread backed Future[T])
 
 const GREETING: Str = "Aion bytecode"
 const LIMIT: Int = 4
@@ -60,6 +62,15 @@ impl Labeled for Circle {
         return "Circle"
     }
 }
+
+// ── Generic functions ────────────────────────────────────────────────────────
+@pure fn identity[T](x: T) -> T { x }
+@pure fn first[A, B](a: A, b: B) -> A { a }
+@pure fn show[T: Display](x: T) -> Str { str(x) }
+
+// ── Async functions ───────────────────────────────────────────────────────────
+@async async fn async_double(n: Int) -> Int { n * 2 }
+@async async fn async_add(a: Int, b: Int) -> Int { a + b }
 
 // ── Pure functions ─────────────────────────────────────────────────────────
 @pure fn factorial(n: Int) -> Int {
@@ -225,4 +236,18 @@ fn abs_clamp(n: Int) -> (clamped: Int) {
     print("Score = ${s}")
     let t: Tag = "aion"
     print("Tag = ${t}")
+
+    // -- generic functions (type-erased) --
+    print("identity(42)    = ${identity(42)}")
+    let hello = "hello"
+    print("identity(hello) = ${identity(hello)}")
+    let xstr = "x"
+    print("first(7, x)     = ${first(7, xstr)}")
+    print("show(123)       = ${show(123)}")
+
+    // -- async fn + await --
+    let doubled = await async_double(21)
+    print("await async_double(21) = ${doubled}")
+    let summed = await async_add(100, 23)
+    print("await async_add(100, 23) = ${summed}")
 }

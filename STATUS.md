@@ -1,6 +1,6 @@
 # Status
 
-**Version:** 0.9.0-dev
+**Version:** 0.10.0-dev
 **State:** Proof-of-concept · Tree-walking interpreter + bytecode compiler/VM · Pre-type-checker
 
 ---
@@ -71,7 +71,7 @@
 - [x] `aion compile` — compile and execute via the bytecode VM
 - [x] `aion test` — collect and run all `@test`-annotated functions; reports PASS/FAIL per function and a summary count
 - [x] Gradle build with ANTLR4 code generation (`generateAntlr` task)
-- [x] **198 passing unit tests** across 6 suites: `AionLanguageTest` (18), `BytecodeCompilerTest` (49), `InterpreterQaTest` (5), `SmallFeaturesTest` (39), `ModuleImportTest` (12), `ResourceScriptE2ETest` (60)
+- [x] **213 passing unit tests** across 6 suites: `AionLanguageTest` (18), `BytecodeCompilerTest` (49), `InterpreterQaTest` (5), `SmallFeaturesTest` (39), `ModuleImportTest` (12), `ResourceScriptE2ETest` (60)
 - [x] `sample.aion` — full demo program
 - [x] `bytecode-demo.aion` — bytecode-path demo with numeric literal forms, range expressions, and destructuring let
 - [x] `math_utils.aion` — shared utility module (abs, clamp, isqrt, sum, gcd, low_byte, is_power_of_two)

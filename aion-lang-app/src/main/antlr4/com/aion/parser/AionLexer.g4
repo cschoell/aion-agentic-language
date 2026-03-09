@@ -43,6 +43,8 @@ CONTINUE    : 'continue' ;   // continue  (next iteration of innermost loop)
 WHERE       : 'where' ;      // where { self … }  — refinement constraint on a type alias
 TRAIT       : 'trait' ;      // trait Name { fn sig … }
 IMPL        : 'impl' ;       // impl TraitName for TypeName { fn … }
+ASYNC       : 'async' ;      // async fn — marks function as asynchronous
+AWAIT       : 'await' ;      // await expr — unwrap a Future[T]
 
 // ── Effect annotations ────────────────────────────────────────────────────────
 ANN_PURE       : '@pure' ;
@@ -70,6 +72,7 @@ T_OPTION    : 'Option' ;
 T_RESULT    : 'Result' ;
 T_LIST      : 'List' ;
 T_MAP       : 'Map' ;
+T_FUTURE    : 'Future' ;
 
 // ── Symbols ───────────────────────────────────────────────────────────────────
 ARROW       : '->' ;

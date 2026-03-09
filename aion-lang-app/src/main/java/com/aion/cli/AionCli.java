@@ -344,6 +344,7 @@ public class AionCli implements Callable<Integer> {
                 case Node.TypeRef.ResultT r -> "Result[" + typeStr(r.ok()) + ", " + typeStr(r.err()) + "]";
                 case Node.TypeRef.ListT   l -> "List[" + typeStr(l.element()) + "]";
                 case Node.TypeRef.MapT    m -> "Map[" + typeStr(m.key()) + ", " + typeStr(m.value()) + "]";
+                case Node.TypeRef.FutureT f -> "Future[" + typeStr(f.inner()) + "]";
                 case Node.TypeRef.Named   n -> n.name();
                 case Node.TypeRef.TupleT  tt -> "(" + tt.elements().stream().map(this::typeStr).reduce((a,b)->a+", "+b).orElse("") + ")";
                 case Node.TypeRef.FnT     f -> "Fn";

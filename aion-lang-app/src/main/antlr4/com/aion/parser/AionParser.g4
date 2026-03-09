@@ -80,7 +80,11 @@ fieldDecl
     ;
 
 typeParams
-    : LBRACKET TYPE_IDENT (COMMA TYPE_IDENT)* RBRACKET
+    : LBRACKET typeParam (COMMA typeParam)* RBRACKET
+    ;
+
+typeParam
+    : TYPE_IDENT (COLON TYPE_IDENT)?    // T  or  T: TraitName
     ;
 
 // ── Enum declarations ─────────────────────────────────────────────────────────
@@ -95,7 +99,7 @@ enumVariant
 
 // ── Function declarations ─────────────────────────────────────────────────────
 fnDecl
-    : annotation* FN IDENT typeParams? LPAREN paramList? RPAREN ARROW returnType block
+    : annotation* ASYNC? FN IDENT typeParams? LPAREN paramList? RPAREN ARROW returnType block
     ;
 
 paramList
@@ -287,6 +291,7 @@ primaryExpr
     | blockExpr                                          # BlockExprRef
     | listLit                                            # ListLitRef
     | mapLit                                             # MapLitRef
+    | AWAIT expr                                          # AwaitExpr
     | FN LPAREN paramList? RPAREN ARROW typeRef block    # LambdaExpr
     | tupleLit                                           # TupleLitRef
     | LPAREN expr RPAREN                                 # Parens
@@ -371,6 +376,7 @@ typeRef
     | T_RESULT LBRACKET typeRef COMMA typeRef RBRACKET         # ResultType
     | T_LIST LBRACKET typeRef RBRACKET                         # ListType
     | T_MAP LBRACKET typeRef COMMA typeRef RBRACKET            # MapType
+    | T_FUTURE LBRACKET typeRef RBRACKET                       # FutureType
     | TYPE_IDENT (LBRACKET typeRef (COMMA typeRef)* RBRACKET)? # NamedType
     | LPAREN typeRef COMMA typeRef (COMMA typeRef)* RPAREN     # TupleType
     | LPAREN typeRef (COMMA typeRef)* RPAREN ARROW typeRef     # FnType

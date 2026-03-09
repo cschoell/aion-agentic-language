@@ -795,4 +795,67 @@ class BytecodeCompilerTest {
             }
             """)).isEqualTo("11\n22\n33");
     }
+
+    // ── Generic functions (bytecode) ──────────────────────────────────────────
+
+    @Test void bc_generic_identity_int() {
+        assertThat(run("""
+            @pure fn identity[T](x: T) -> T { x }
+            @pure fn main() -> Unit { print(identity(99)) }
+            """)).isEqualTo("99");
+    }
+
+    @Test void bc_generic_identity_str() {
+        assertThat(run("""
+            @pure fn identity[T](x: T) -> T { x }
+            @pure fn main() -> Unit { print(identity("world")) }
+            """)).isEqualTo("world");
+    }
+
+    @Test void bc_generic_two_params() {
+        assertThat(run("""
+            @pure fn first[A, B](a: A, b: B) -> A { a }
+            @pure fn main() -> Unit { print(first(7, "x")) }
+            """)).isEqualTo("7");
+    }
+
+    @Test void bc_generic_with_trait_constraint() {
+        assertThat(run("""
+            @pure fn show[T: Display](x: T) -> Str { str(x) }
+            @pure fn main() -> Unit { print(show(123)) }
+            """)).isEqualTo("123");
+    }
+
+    // ── Async / await (bytecode) ──────────────────────────────────────────────
+
+    @Test void bc_await_simple() {
+        assertThat(run("""
+            @async async fn compute() -> Int { 42 }
+            @pure fn main() -> Unit {
+                let r = await compute()
+                print(r)
+            }
+            """)).isEqualTo("42");
+    }
+
+    @Test void bc_await_with_argument() {
+        assertThat(run("""
+            @async async fn double(n: Int) -> Int { n * 2 }
+            @pure fn main() -> Unit {
+                let r = await double(6)
+                print(r)
+            }
+            """)).isEqualTo("12");
+    }
+
+    @Test void bc_multiple_awaits() {
+        assertThat(run("""
+            @async async fn add(a: Int, b: Int) -> Int { a + b }
+            @pure fn main() -> Unit {
+                let x = await add(3, 4)
+                let y = await add(10, 20)
+                print(x + y)
+            }
+            """)).isEqualTo("37");
+    }
 }

@@ -705,6 +705,87 @@ class SmallFeaturesTest {
         assertThat(out).containsExactly("Alice", "30");
     }
 
+    // ── Generic functions ─────────────────────────────────────────────────────
+
+    @Test void generic_identity_int() {
+        var out = run("""
+            @pure fn identity[T](x: T) -> T { x }
+            @pure fn main() -> Unit { print(identity(42)) }
+            """);
+        assertThat(out).containsExactly("42");
+    }
+
+    @Test void generic_identity_str() {
+        var out = run("""
+            @pure fn identity[T](x: T) -> T { x }
+            @pure fn main() -> Unit { print(identity("hello")) }
+            """);
+        assertThat(out).containsExactly("hello");
+    }
+
+    @Test void generic_first_of_two() {
+        var out = run("""
+            @pure fn first[A, B](a: A, b: B) -> A { a }
+            @pure fn main() -> Unit { print(first(10, "ignored")) }
+            """);
+        assertThat(out).containsExactly("10");
+    }
+
+    @Test void generic_with_trait_constraint() {
+        // T: Display constraint is parsed and stored; runtime is type-erased
+        var out = run("""
+            @pure fn show[T: Display](x: T) -> Str { str(x) }
+            @pure fn main() -> Unit { print(show(99)) }
+            """);
+        assertThat(out).containsExactly("99");
+    }
+
+    // ── Async / await ─────────────────────────────────────────────────────────
+
+    @Test void async_fn_returns_future() {
+        var val = runFn("""
+            @async async fn compute() -> Int { 42 }
+            @pure fn main() -> Unit { }
+            """, "compute");
+        assertThat(val).isInstanceOf(com.aion.interpreter.AionValue.FutureVal.class);
+        var fv = (com.aion.interpreter.AionValue.FutureVal) val;
+        assertThat(fv.future().join()).isEqualTo(new com.aion.interpreter.AionValue.IntVal(42));
+    }
+
+    @Test void await_unwraps_future() {
+        var out = run("""
+            @async async fn compute() -> Int { 21 }
+            @pure fn main() -> Unit {
+                let result = await compute()
+                print(result)
+            }
+            """);
+        assertThat(out).containsExactly("21");
+    }
+
+    @Test void async_with_argument() {
+        var out = run("""
+            @async async fn double(n: Int) -> Int { n * 2 }
+            @pure fn main() -> Unit {
+                let r = await double(7)
+                print(r)
+            }
+            """);
+        assertThat(out).containsExactly("14");
+    }
+
+    @Test void multiple_awaits() {
+        var out = run("""
+            @async async fn add(a: Int, b: Int) -> Int { a + b }
+            @pure fn main() -> Unit {
+                let x = await add(3, 4)
+                let y = await add(10, 20)
+                print(x + y)
+            }
+            """);
+        assertThat(out).containsExactly("37");
+    }
+
     // ── Deep field assignment (feature #6) ────────────────────────────────────
 
     @Test void deep_field_assignment_interpreter() {

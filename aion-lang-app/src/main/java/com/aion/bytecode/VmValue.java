@@ -2,6 +2,7 @@ package com.aion.bytecode;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Runtime value types for the Aion bytecode VM.
@@ -15,7 +16,8 @@ public sealed interface VmValue permits
         VmValue.EnumVal, VmValue.RecordVal,
         VmValue.ListVal, VmValue.MapVal,
         VmValue.TupleVal,
-        VmValue.LambdaVal {
+        VmValue.LambdaVal,
+        VmValue.FutureVal {
 
     /** Option::Some(inner) */
     record SomeVal(Object inner) implements VmValue {}
@@ -41,5 +43,7 @@ public sealed interface VmValue permits
      * {@code params} lists parameter names in order for named-argument binding.
      */
     record LambdaVal(int address, java.util.List<String> params) implements VmValue {}
+    /** A Future[T] value — result of an async function call. */
+    record FutureVal(CompletableFuture<Object> future) implements VmValue {}
 }
 

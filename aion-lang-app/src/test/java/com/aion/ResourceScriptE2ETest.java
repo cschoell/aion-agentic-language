@@ -173,7 +173,13 @@ class ResourceScriptE2ETest {
             "Rect area   = 40",
             "Circle area = 48",
             "Score = 75",
-            "Tag = aion"
+            "Tag = aion",
+            "identity(42)    = 42",
+            "identity(hello) = hello",
+            "first(7, x)     = 7",
+            "show(123)       = 123",
+            "await async_double(21) = 42",
+            "await async_add(100, 23) = 123"
     );
 
     @Test void bytecode_demo_interpreter() throws Exception {

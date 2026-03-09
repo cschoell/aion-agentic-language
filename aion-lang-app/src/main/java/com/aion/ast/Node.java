@@ -1,6 +1,7 @@
 package com.aion.ast;
 
 import java.util.List;
+import java.util.Map;
 
 /** Marker interface for all AST nodes. */
 public interface Node {
@@ -50,8 +51,11 @@ public interface Node {
                     List<FnDecl> methods, Pos pos) implements Node {}
 
     record FnDecl(List<Annotation> annotations,
+                  boolean isAsync,
                   String name,
                   List<String> typeParams,
+                  /** Trait constraints per type param, e.g. "T" -> "Display". Empty string = unconstrained. */
+                  Map<String, String> typeParamConstraints,
                   List<Param> params,
                   TypeRef returnType,
                   /** Non-null when signature uses {@code -> (name: Type)}; null otherwise. */
@@ -143,7 +147,7 @@ public interface Node {
             Expr.Match, Expr.BlockExpr, Expr.ListLit, Expr.MapLit,
             Expr.TupleLit,
             Expr.Propagate, Expr.TrustedExpr, Expr.UntrustedExpr,
-            Expr.InterpolatedStr, Expr.Lambda, Expr.RangeLit {
+            Expr.InterpolatedStr, Expr.Lambda, Expr.RangeLit, Expr.Await {
 
         record IntLit(long value, Pos pos)          implements Expr {}
         record FloatLit(double value, Pos pos)      implements Expr {}
@@ -191,6 +195,8 @@ public interface Node {
         record Lambda(List<Param> params, TypeRef returnType, Stmt.Block body, Pos pos) implements Expr {}
         /** Range literal: {@code from..to} (exclusive) or {@code from..=to} (inclusive). */
         record RangeLit(Expr from, Expr to, boolean inclusive, Pos pos) implements Expr {}
+        /** Await expression: {@code await expr} — unwraps a Future[T] value. */
+        record Await(Expr inner, Pos pos) implements Expr {}
     }
 
     /** A match arm with an optional guard: pattern [if guard] => body */
@@ -244,7 +250,7 @@ public interface Node {
     // ── Type references ───────────────────────────────────────────────────────
     sealed interface TypeRef permits
             TypeRef.IntT, TypeRef.FloatT, TypeRef.BoolT, TypeRef.StrT, TypeRef.UnitT,
-            TypeRef.OptionT, TypeRef.ResultT, TypeRef.ListT, TypeRef.MapT,
+            TypeRef.OptionT, TypeRef.ResultT, TypeRef.ListT, TypeRef.MapT, TypeRef.FutureT,
             TypeRef.Named, TypeRef.TupleT, TypeRef.FnT {
 
         record IntT()                                                   implements TypeRef {}
@@ -256,6 +262,8 @@ public interface Node {
         record ResultT(TypeRef ok, TypeRef err)                         implements TypeRef {}
         record ListT(TypeRef element)                                   implements TypeRef {}
         record MapT(TypeRef key, TypeRef value)                         implements TypeRef {}
+        /** Future type: {@code Future[T]} — result of an async function call. */
+        record FutureT(TypeRef inner)                                    implements TypeRef {}
         record Named(String name, List<TypeRef> args)                   implements TypeRef {}
         /** Tuple type: {@code (Int, Str, Bool)}. Always has ≥ 2 elements. */
         record TupleT(List<TypeRef> elements)                           implements TypeRef {}

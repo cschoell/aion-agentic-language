@@ -5,6 +5,54 @@ Versioning follows **date-based** releases while the project is pre-1.0.
 
 ---
 
+## [0.10.0] — 2026-03-09 · Generic functions + async/await
+
+### Language
+- **Generic functions** — `fn identity[T](x: T) -> T { x }` and `fn show[T: Display](x: T) -> Str { … }`.
+  Type parameters are parsed with optional trait constraints (`T: TraitName`); runtime is type-erased
+  (Aion values carry no static type, so generics work without monomorphisation).
+- **`async fn` + `await`** — `async fn compute() -> Int { … }` marks a function as asynchronous;
+  calling it returns a `Future[T]` value immediately. `await expr` blocks until the future resolves
+  and unwraps the result. Backed by Java virtual threads (`Thread.ofVirtual()`).
+- **Implicit return** — a trailing expression statement in a function body is now treated as the
+  return value in both the interpreter and bytecode VM (enables idiomatic `fn f() -> T { expr }`).
+- **`Future[T]` type** — new `TypeRef.FutureT` in the AST; `T_FUTURE` lexer token; `FutureType`
+  parser rule; `FutureVal` in `AionValue` and `VmValue`.
+
+### Grammar / Parser
+- `AionLexer.g4` — new `ASYNC`, `AWAIT`, `T_FUTURE` tokens.
+- `AionParser.g4` — `fnDecl` extended with optional `ASYNC?`; `typeParams` refactored to
+  `typeParam` rule supporting `T: TraitName` constraints; `AwaitExpr` primary expression;
+  `FutureType` type reference.
+- `Node.FnDecl` — added `isAsync` flag and `typeParamConstraints` map.
+- `Node.Expr.Await(inner, pos)` — new AST node.
+- `Node.TypeRef.FutureT(inner)` — new type reference.
+
+### Interpreter
+- `callFn` — detects `isAsync`, spawns a virtual thread, returns `FutureVal` immediately.
+- `Expr.Await` — evaluated by calling `.join()` on the `FutureVal`'s `CompletableFuture`.
+- `execBlockWithImplicitReturn` — new helper for trailing-expression implicit return.
+
+### Bytecode
+- `Instruction.MakeAsync(address, arity, params)` — spawns async VM on virtual thread, pushes `FutureVal`.
+- `Instruction.AwaitFuture()` — pops `FutureVal`, calls `.join()`, pushes result.
+- `BytecodeCompiler` — emits `MakeAsync` for async fn calls; implicit-return detection in
+  `compileFnDeclNamed`; `Expr.Await` compiles to `AwaitFuture`.
+- `BytecodeVM` — `Return` with empty frame stack halts cleanly (enables async sub-VM entry);
+  `MakeAsync` / `AwaitFuture` cases added.
+
+### Tests
+- 4 new interpreter generic tests + 4 async tests in `SmallFeaturesTest`.
+- 4 new bytecode generic tests + 3 async tests in `BytecodeCompilerTest`.
+- Total: **213 passing tests** across 7 suites.
+
+### Demo
+- `bytecode-demo.aion` — new generic functions section (`identity`, `first`, `show`) and
+  async section (`async_double`, `async_add` with `await`).
+- `ResourceScriptE2ETest` expected output updated with 6 new lines.
+
+---
+
 ## [0.9.0] — 2026-03-09 · Refinement type bytecode injection
 
 ### Bytecode

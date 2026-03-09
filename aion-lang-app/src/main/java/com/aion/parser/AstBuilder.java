@@ -5,7 +5,9 @@ import com.aion.ast.Node.*;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Converts an ANTLR4 parse tree into the typed AST.
@@ -118,7 +120,7 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
         }
         // trait members may have no body (abstract signature)
         Node.Stmt.Block body = ctx.block() != null ? buildBlock(ctx.block()) : new Node.Stmt.Block(List.of(), pos(ctx));
-        return new Node.FnDecl(anns, ctx.IDENT().getText(), tp, params, ret, namedReturn, body, pos(ctx));
+        return new Node.FnDecl(anns, false, ctx.IDENT().getText(), tp, Collections.emptyMap(), params, ret, namedReturn, body, pos(ctx));
     }
 
     @Override
@@ -157,8 +159,19 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
     private List<String> convertTypeParams(AionParser.TypeParamsContext ctx) {
         if (ctx == null) return Collections.emptyList();
         List<String> r = new ArrayList<>();
-        for (var t : ctx.TYPE_IDENT()) r.add(t.getText());
+        for (var t : ctx.typeParam()) r.add(t.TYPE_IDENT(0).getText());
         return r;
+    }
+
+    private Map<String, String> convertTypeParamConstraints(AionParser.TypeParamsContext ctx) {
+        if (ctx == null) return Collections.emptyMap();
+        Map<String, String> m = new HashMap<>();
+        for (var t : ctx.typeParam()) {
+            String name = t.TYPE_IDENT(0).getText();
+            String constraint = t.TYPE_IDENT().size() > 1 ? t.TYPE_IDENT(1).getText() : "";
+            m.put(name, constraint);
+        }
+        return m;
     }
 
     // ── Enum ──────────────────────────────────────────────────────────────────
@@ -209,8 +222,10 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
         } else {
             ret = convertTypeRef(((AionParser.PlainReturnContext) rt).typeRef());
         }
+        boolean isAsync = ctx.ASYNC() != null;
+        Map<String, String> constraints = convertTypeParamConstraints(ctx.typeParams());
         Stmt.Block body = buildBlock(ctx.block());
-        return new FnDecl(anns, ctx.IDENT().getText(), tp, params, ret, namedReturn, body, pos(ctx));
+        return new FnDecl(anns, isAsync, ctx.IDENT().getText(), tp, constraints, params, ret, namedReturn, body, pos(ctx));
     }
 
     private Annotation convertAnnotation(AionParser.AnnotationContext ctx) {
@@ -478,6 +493,7 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
             case AionParser.BlockExprRefContext  c -> buildBlockExpr(c.blockExpr());
             case AionParser.ListLitRefContext    c -> buildListLit(c.listLit());
             case AionParser.MapLitRefContext     c -> buildMapLit(c.mapLit());
+            case AionParser.AwaitExprContext      c -> new Expr.Await(buildExpr(c.expr()), pos(c));
             case AionParser.LambdaExprContext    c -> buildLambda(c);
             case AionParser.TupleLitRefContext c -> {
                 List<Expr> elems = new ArrayList<>();
@@ -657,6 +673,7 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
             case AionParser.ListTypeContext c -> new TypeRef.ListT(convertTypeRef(c.typeRef()));
             case AionParser.MapTypeContext  c ->
                     new TypeRef.MapT(convertTypeRef(c.typeRef(0)), convertTypeRef(c.typeRef(1)));
+            case AionParser.FutureTypeContext c -> new TypeRef.FutureT(convertTypeRef(c.typeRef()));
             case AionParser.NamedTypeContext c -> {
                 List<TypeRef> args = new ArrayList<>();
                 for (var t : c.typeRef()) args.add(convertTypeRef(t));
