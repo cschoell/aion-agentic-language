@@ -1,0 +1,86 @@
+// ── import-demo.aion ──────────────────────────────────────────────────────────
+//
+// Demonstrates the Aion module / import system together with the new
+// numeric-literal forms introduced in recent releases.
+//
+// Run with:
+//   aion compile import-demo.aion        (bytecode VM)
+//   aion run     import-demo.aion        (tree-walking interpreter)
+//
+// New features showcased:
+//   import               — pulls in math_utils.aion at compile time
+//   hex literals         — 0xFF, 0xDEAD
+//   binary literals      — 0b1010_1010
+//   octal literals       — 0o755
+//   underscore separator — 1_000_000, 0b1111_0000
+//   imported consts      — MAX_BYTE, BIT_MASK, MILLION from math_utils
+//   imported functions   — abs, clamp, isqrt, sum, gcd, low_byte, is_power_of_two
+
+import math_utils
+
+const VERSION: Int = 0x0102   // version 1.2 encoded as hex
+
+@pure fn main() -> Unit {
+    // ── Imported constants ────────────────────────────────────────────────
+    print("=== Imported constants ===")
+    print("MAX_BYTE  = ${MAX_BYTE}")    // 255
+    print("BIT_MASK  = ${BIT_MASK}")    // 240
+    print("OCTAL_EX  = ${OCTAL_EX}")    // 511
+    print("MILLION   = ${MILLION}")     // 1000000
+    print("")
+
+    // ── Hex literals ──────────────────────────────────────────────────────
+    print("=== Hex literals ===")
+    let red_channel   = 0xFF
+    let green_channel = 0x80
+    let blue_channel  = 0x00
+    print("RGB(0xFF, 0x80, 0x00) => r=${red_channel}, g=${green_channel}, b=${blue_channel}")
+    print("Version 0x0102 => ${VERSION}")
+    print("")
+
+    // ── Binary literals with underscore separators ────────────────────────
+    print("=== Binary literals ===")
+    let flags     = 0b1010_1010   // alternating bits = 170
+    let perm_rwx  = 0b111         // Unix rwx = 7
+    print("flags 0b1010_1010 = ${flags}")
+    print("perm  0b111       = ${perm_rwx}")
+    print("")
+
+    // ── Octal literals ────────────────────────────────────────────────────
+    print("=== Octal literals ===")
+    let unix_perm = 0o755   // rwxr-xr-x = 493
+    let dir_perm  = 0o644   // rw-r--r-- = 420
+    print("0o755 (rwxr-xr-x) = ${unix_perm}")
+    print("0o644 (rw-r--r--) = ${dir_perm}")
+    print("")
+
+    // ── Underscore separators on decimal literals ─────────────────────────
+    print("=== Underscore separators ===")
+    let population = 8_000_000_000
+    let budget     = 1_250_000
+    print("World population : ${population}")
+    print("Budget           : ${budget}")
+    print("")
+
+    // ── Imported utility functions ────────────────────────────────────────
+    print("=== Imported math_utils functions ===")
+    print("abs(-42)              = ${abs(-42)}")
+    print("clamp(150, 0, 100)    = ${clamp(150, 0, 100)}")
+    print("isqrt(144)            = ${isqrt(144)}")
+    print("sum([1,2,3,4,5])      = ${sum([1, 2, 3, 4, 5])}")
+    print("gcd(48, 18)           = ${gcd(48, 18)}")
+    print("low_byte(0xABCD)      = ${low_byte(0xABCD)}")
+    print("is_power_of_two(64)   = ${is_power_of_two(64)}")
+    print("is_power_of_two(100)  = ${is_power_of_two(100)}")
+    print("")
+
+    // ── Mix: hex + imported function ──────────────────────────────────────
+    print("=== Combined: hex + imported logic ===")
+    let raw    = 0xFF00        // 65280 — hex literal
+    let lo     = low_byte(raw)          // lower 8 bits via modulo
+    let raw_hi = raw / 0x100
+    let hi     = low_byte(raw_hi)       // upper byte
+    print("raw 0xFF00       = ${raw}")
+    print("low byte         = ${lo}")   // 0
+    print("high byte        = ${hi}")   // 255
+}

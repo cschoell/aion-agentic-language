@@ -44,7 +44,7 @@ public class AionCli implements Callable<Integer> {
 
         @Override public Integer call() {
             try {
-                var result = AionFrontend.parseFile(file);
+                var result = AionFrontend.parseFileWithImports(file);
                 if (result.hasErrors()) {
                     result.errors().forEach(System.err::println);
                     return 1;
@@ -146,7 +146,7 @@ public class AionCli implements Callable<Integer> {
 
         @Override public Integer call() {
             try {
-                var result = com.aion.parser.AionFrontend.parseFile(file);
+                var result = com.aion.parser.AionFrontend.parseFileWithImports(file);
                 if (result.hasErrors()) {
                     result.errors().forEach(System.err::println);
                     return 1;

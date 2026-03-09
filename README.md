@@ -2,7 +2,7 @@
 
 A programming language designed to be **optimal for AI agents to generate and reason about**, while remaining readable for humans.
 
-> **Version 0.4.0-dev** — Tree-walking interpreter + bytecode compiler/VM · 82 passing tests · Pre-type-checker
+> **Version 0.4.0-dev** — Tree-walking interpreter + bytecode compiler/VM · 160 passing tests · Multi-file imports · Pre-type-checker
 
 ## Design Principles
 

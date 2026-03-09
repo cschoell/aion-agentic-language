@@ -1,6 +1,6 @@
 # Status
 
-**Version:** 0.3.0-dev  
+**Version:** 0.4.0-dev
 **State:** Proof-of-concept · Tree-walking interpreter + bytecode compiler/VM · Pre-type-checker
 
 ---
@@ -9,6 +9,7 @@
 
 ### Language
 - [x] Full lexer + parser grammar (ANTLR4)
+- [x] **Numeric literal forms** — hex (`0xFF`), binary (`0b1010`), octal (`0o755`), underscore digit separators (`1_000_000`)
 - [x] Sealed/record AST hierarchy — exhaustive Java pattern matching throughout
 - [x] All primitive types: `Int`, `Float`, `Bool`, `Str`, `Unit`
 - [x] Generic built-in types: `Option[T]`, `Result[T,E]`, `List[T]`, `Map[K,V]`
@@ -57,13 +58,16 @@
 - [x] `aion repl` — interactive REPL with multi-line brace-depth tracking
 - [x] `aion compile` — compile and execute via the bytecode VM
 - [x] Gradle build with ANTLR4 code generation (`generateAntlr` task)
-- [x] **72 passing unit tests** across 4 suites: `AionLanguageTest` (18), `BytecodeCompilerTest` (30), `InterpreterQaTest` (5), `SmallFeaturesTest` (20)
+- [x] **160 passing unit tests** across 6 suites: `AionLanguageTest` (18), `BytecodeCompilerTest` (40), `InterpreterQaTest` (5), `SmallFeaturesTest` (30), `ModuleImportTest` (7), `ResourceScriptE2ETest` (60)
 - [x] `sample.aion` — full demo program
-- [x] `bytecode-demo.aion` — bytecode-path demo
+- [x] `bytecode-demo.aion` — bytecode-path demo with numeric literal forms
+- [x] `math_utils.aion` — shared utility module (abs, clamp, isqrt, sum, gcd, low_byte, is_power_of_two)
+- [x] `import-demo.aion` — multi-file import demo with all numeric literal forms
 
 ### Documentation
-- [x] `docs/missing-features.md` — 18-item gap analysis rated by impact
+- [x] `docs/missing-features.md` — gap analysis rated by impact (items #1 and #14 implemented)
 - [x] `docs/Aion Agent Ecosystem Technical Breakdown.md` — A2A protocol, registry, arbitration, researcher-alpha manifest
+- [x] `.github/copilot-instructions.md` — architecture overview, key file map, feature checklist, build commands
 
 ---
 
@@ -75,7 +79,8 @@
 - [ ] **Destructuring `let`** — `let { name, age } = user` / `let (a, b) = pair`
 - [ ] **Tuple type** — lightweight anonymous product type `(Int, Str, Bool)` without field names
 - [ ] **Range expressions** — `0..10`, `0..=10` for use in `for` loops and slices
-- [ ] **Import resolution** — multi-file module system with actual file loading, namespace, and re-export
+- [x] **Import resolution** — `parseFileWithImports`: recursive file loading, transitive imports, cycle detection (`import math_utils` works end-to-end)
+- [ ] **Import namespacing / re-export** — explicit namespace prefixes and `export` keyword
 - [ ] **Exhaustiveness checking** — static verification that `match` covers all enum variants
 - [ ] **`@requires` / `@ensures` runtime enforcement** — VM checks pre/post conditions and raises `ConstraintViolation`
 - [ ] **`@timeout` enforcement** — thread interrupt after declared milliseconds

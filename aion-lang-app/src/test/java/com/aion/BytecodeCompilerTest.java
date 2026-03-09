@@ -613,4 +613,52 @@ class BytecodeCompilerTest {
             }
             """)).isEqualTo("10");
     }
+
+    // ── Numeric literal forms (feature #14) ──────────────────────────────────
+
+    @Test void bc_hex_literal() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                let x = 0xFF
+                print(x)
+            }
+            """)).isEqualTo("255");
+    }
+
+    @Test void bc_binary_literal() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                let x = 0b1010
+                print(x)
+            }
+            """)).isEqualTo("10");
+    }
+
+    @Test void bc_octal_literal() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                let x = 0o17
+                print(x)
+            }
+            """)).isEqualTo("15");
+    }
+
+    @Test void bc_digit_separator() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                let x = 1_000_000
+                print(x)
+            }
+            """)).isEqualTo("1000000");
+    }
+
+    @Test void bc_hex_arithmetic() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                let a = 0x10
+                let b = 0b0100
+                print(a + b)
+            }
+            """)).isEqualTo("20");
+    }
 }

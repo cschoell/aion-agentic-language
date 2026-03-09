@@ -157,6 +157,11 @@ class ResourceScriptE2ETest {
             "abs_clamp(-7) = 7",
             "abs_clamp(4)  = 4",
             "counter 'hits' = 42",
+            "MAX_BYTE 0xFF        = 255",
+            "FLAGS    0b1010_1010 = 170",
+            "UNIX_RWX 0o755       = 493",
+            "MILLION  1_000_000   = 1000000",
+            "0xDEAD = 57005, 0xDEAD / 0x10 = 3562",
             "p + q = 7",
             "sum(1..5) = 15"
     );

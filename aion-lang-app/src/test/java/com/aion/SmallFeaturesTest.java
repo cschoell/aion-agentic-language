@@ -539,6 +539,59 @@ class SmallFeaturesTest {
         assertThat(out).containsExactly("7", "3");
     }
 
+    // ── Numeric literal forms (feature #14) ──────────────────────────────────
+
+    @Test void hex_literal_interpreter() {
+        var out = run("""
+            @pure fn main() -> Unit {
+                let x = 0xFF
+                print(x)
+            }
+            """);
+        assertThat(out).containsExactly("255");
+    }
+
+    @Test void binary_literal_interpreter() {
+        var out = run("""
+            @pure fn main() -> Unit {
+                let x = 0b1010
+                print(x)
+            }
+            """);
+        assertThat(out).containsExactly("10");
+    }
+
+    @Test void octal_literal_interpreter() {
+        var out = run("""
+            @pure fn main() -> Unit {
+                let x = 0o17
+                print(x)
+            }
+            """);
+        assertThat(out).containsExactly("15");
+    }
+
+    @Test void digit_separator_interpreter() {
+        var out = run("""
+            @pure fn main() -> Unit {
+                let x = 1_000_000
+                print(x)
+            }
+            """);
+        assertThat(out).containsExactly("1000000");
+    }
+
+    @Test void hex_arithmetic_interpreter() {
+        var out = run("""
+            @pure fn main() -> Unit {
+                let a = 0x10
+                let b = 0b0100
+                print(a + b)
+            }
+            """);
+        assertThat(out).containsExactly("20");
+    }
+
     // ── Deep field assignment (feature #6) ────────────────────────────────────
 
     @Test void deep_field_assignment_interpreter() {

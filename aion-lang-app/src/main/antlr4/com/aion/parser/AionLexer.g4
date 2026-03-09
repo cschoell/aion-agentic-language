@@ -103,8 +103,12 @@ UNDERSCORE  : '_' ;
 SEMI        : ';' ;    // optional inline statement separator
 
 // ── Literals ──────────────────────────────────────────────────────────────────
-INT_LIT     : '-'? [0-9]+ ;
-FLOAT_LIT   : '-'? [0-9]+ '.' [0-9]+ ;
+INT_LIT     : '-'? ( '0x' [0-9a-fA-F] ([0-9a-fA-F_]* [0-9a-fA-F])?   // hex
+              | '0b' [01]  ([01_]*  [01])?                              // binary
+              | '0o' [0-7] ([0-7_]* [0-7])?                            // octal
+              | [0-9] ([0-9_]* [0-9])?                                 // decimal (with _ separators)
+              ) ;
+FLOAT_LIT   : '-'? [0-9] ([0-9_]* [0-9])? '.' [0-9] ([0-9_]* [0-9])? ;
 // Interpolated string — contains at least one ${...} hole; matched before plain STR_LIT
 INTERP_STR  : '"' (ESC | '$' '{' ~[}]+ '}' | ~["\\\n$])* '$' '{' ~[}]+ '}' (ESC | '$' '{' ~[}]+ '}' | ~["\\\n$])* '"' ;
 STR_LIT     : '"' (ESC | ~["\\\n])* '"' ;

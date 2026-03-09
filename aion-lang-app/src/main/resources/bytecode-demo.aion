@@ -5,10 +5,15 @@
 // Features demonstrated:
 //   const, string interp, break, continue, recursion,
 //   lambda (map/filter), @on_fail, tuples, named return,
-//   deep field assignment, semicolon statement separator
+//   deep field assignment, semicolon statement separator,
+//   hex / binary / octal literals, underscore digit separators
 
 const GREETING: Str = "Aion bytecode"
 const LIMIT: Int = 4
+const MAX_BYTE: Int = 0xFF          // 255  — hex literal
+const FLAGS: Int    = 0b1010_1010   // 170  — binary literal with separator
+const UNIX_RWX: Int = 0o755         // 493  — octal literal
+const MILLION: Int  = 1_000_000     // underscore digit separator
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type Counter = { label: Str, value: Int }
@@ -121,6 +126,15 @@ fn abs_clamp(n: Int) -> (clamped: Int) {
     mut ctr = Counter { label: "hits", value: 0 }
     ctr.value = 42
     print("counter '${ctr.label}' = ${ctr.value}")
+
+    // -- numeric literals: hex, binary, octal, underscore separator --
+    print("MAX_BYTE 0xFF        = ${MAX_BYTE}")
+    print("FLAGS    0b1010_1010 = ${FLAGS}")
+    print("UNIX_RWX 0o755       = ${UNIX_RWX}")
+    print("MILLION  1_000_000   = ${MILLION}")
+    let color   = 0xDEAD
+    let shifted = color / 0x10
+    print("0xDEAD = ${color}, 0xDEAD / 0x10 = ${shifted}")
 
     // -- semicolon as inline statement separator --
     let p = 3; let q = 4

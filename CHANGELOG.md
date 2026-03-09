@@ -5,6 +5,25 @@ Versioning follows **date-based** releases while the project is pre-1.0.
 
 ---
 
+## [0.4.0] — 2026-03-09 · Demo scripts, numeric literals & module imports
+### Language
+- **Numeric literal forms** — hex (`0xFF`), binary (`0b1010`), octal (`0o755`), and underscore digit separators (`1_000_000`) in both the lexer and `AstBuilder`.
+- **Module import system** — `AionFrontend.parseFileWithImports(Path)`: depth-first recursive file loading, transitive imports, cycle detection, and missing-file errors; flat `Module` merge.
+- `AionCli` `run` and `compile` subcommands now use `parseFileWithImports` so multi-file programs work end-to-end.
+### Demo scripts
+- **`math_utils.aion`** (new) — shared utility module: `abs`, `clamp`, `isqrt`, `sum`, `gcd`, `low_byte`, `is_power_of_two`; showcases all new literal forms.
+- **`import-demo.aion`** (new) — full demo of `import math_utils` plus hex/binary/octal/underscore literals and every imported function.
+- **`bytecode-demo.aion`** — added `MAX_BYTE`, `FLAGS`, `UNIX_RWX`, `MILLION` consts and a numeric-literals section in `main()`.
+### Tests
+- 10 new numeric-literal tests in `SmallFeaturesTest` and `BytecodeCompilerTest`.
+- 7 new import tests in new `ModuleImportTest` class (interpreter + bytecode, transitive imports, error case).
+- Total: **160 passing tests** across 6 suites.
+### Docs
+- `docs/missing-features.md` updated — items #1 (imports) and #14 (numeric literals) marked implemented.
+- `STATUS.md`, `README.md`, and `CHANGELOG.md` updated to reflect current state.
+- `.github/copilot-instructions.md` expanded with architecture overview, key file map, feature checklist, and build commands.
+- `.junie/guidelines.md` created as a single-line pointer to `copilot-instructions.md`.
+---
 ## [0.1.0] — 2026-03-06 · Initial implementation
 
 ### Language design
@@ -62,9 +81,40 @@ Versioning follows **date-based** releases while the project is pre-1.0.
 
 ---
 
+## [0.1.9] — 2026-03-09 · Numeric literals & module imports
+
+### Language
+- **Numeric literal forms** (feature #14): hex (`0xFF`), binary (`0b1010`), octal (`0o17`),
+  and digit-separator (`1_000_000`) integer literals now supported in the lexer and parsed
+  correctly by `AstBuilder`. Both interpreter and bytecode VM handle them transparently.
+- **Module import system** (feature #1, basic): `import foo.bar` now resolves
+  `foo/bar.aion` relative to the importing file, parses it, and merges all its declarations
+  into the current module before compilation. Transitive imports and cycle detection are
+  supported. Namespace isolation and stdlib remain future work.
+
+### Parser / Frontend
+- `AionLexer.g4` — `INT_LIT` rule extended with `0x…`, `0b…`, `0o…` prefixes and `_`
+  digit separators; `FLOAT_LIT` also accepts `_` separators.
+- `AstBuilder` — new `parseIntLit` helper strips `_` and dispatches to `Long.parseLong`
+  with the correct radix; used for `IntLit`, `IntPat`, and `@timeout` annotation values.
+- `AionFrontend` — new `parseFileWithImports(Path)` method: depth-first recursive import
+  resolution, cycle detection, missing-file error reporting, flat `Module` merge.
+
+### CLI
+- `aion run` and `aion compile` now use `parseFileWithImports` so multi-file programs
+  work out of the box.
+
+### Tests
+- 10 new tests in `SmallFeaturesTest` and `BytecodeCompilerTest` covering all numeric
+  literal forms (hex, binary, octal, digit separator, mixed arithmetic).
+- 7 new tests in `ModuleImportTest` covering: function import, const import, transitive
+  imports, and missing-module error — for both interpreter and bytecode backends.
+
+---
+
 ## [Unreleased] — upcoming
 
 - Type checker (see STATUS.md roadmap).
 - Standard library modules.
-- Bytecode or JVM compilation target.
+- Namespace isolation for imported modules.
 

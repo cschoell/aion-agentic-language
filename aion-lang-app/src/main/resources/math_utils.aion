@@ -1,0 +1,77 @@
+// ── math_utils.aion ───────────────────────────────────────────────────────────
+//
+// Shared math utilities — imported by other demo scripts via:
+//   import math_utils
+//
+// Features demonstrated here:
+//   hex / binary / octal literals   — 0xFF, 0b1010, 0o17
+//   underscore digit separators     — 1_000_000
+//   const with numeric literals     — MAX_BYTE, BIT_MASK, …
+//   @pure functions                 — safe for agent / bytecode use
+
+const MAX_BYTE: Int    = 0xFF        // 255  — hex literal
+const BIT_MASK: Int    = 0b1111_0000 // 240  — binary literal with separator
+const OCTAL_EX: Int    = 0o777       // 511  — octal literal
+const MILLION:  Int    = 1_000_000   // 1000000 — underscore separator
+
+// Returns the absolute value of n.
+@pure fn abs(n: Int) -> Int {
+    return match n {
+        x if x < 0 => -x,
+        x           => x,
+    }
+}
+
+// Clamps n to the range [lo, hi].
+@pure fn clamp(n: Int, lo: Int, hi: Int) -> Int {
+    if n < lo { return lo }
+    if n > hi { return hi }
+    return n
+}
+
+// Returns true when n is a power of two (n > 0 and n % 2^k == 0 for some k).
+@pure fn is_power_of_two(n: Int) -> Bool {
+    if n <= 0 { return false }
+    mut x = n
+    while x > 1 {
+        if x % 2 != 0 { return false }
+        x = x / 2
+    }
+    return true
+}
+
+// Masks the lower byte of n (keeps bits 0-7) via modulo.
+@pure fn low_byte(n: Int) -> Int {
+    return n % 256
+}
+
+// Simple integer square root (floor).
+@pure fn isqrt(n: Int) -> Int {
+    if n <= 0 { return 0 }
+    mut r = 0
+    mut sq = 0
+    while sq <= n {
+        r = r + 1
+        sq = r * r
+    }
+    return r - 1
+}
+
+// Sum of a list of integers.
+@pure fn sum(xs: List[Int]) -> Int {
+    mut acc = 0
+    for x in xs { acc = acc + x }
+    return acc
+}
+
+// Greatest common divisor (Euclidean).
+@pure fn gcd(a: Int, b: Int) -> Int {
+    mut x = abs(a)
+    mut y = abs(b)
+    while y != 0 {
+        let tmp = y
+        y = x % y
+        x = tmp
+    }
+    return x
+}

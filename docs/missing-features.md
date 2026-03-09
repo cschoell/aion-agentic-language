@@ -1,7 +1,9 @@
 # Aion — Missing features for larger systems
 
 > Analysis date: 2026-03-06  
-> Last updated: 2026-03-09 — items 2 (closures/lambdas), 17 (@on_fail), 16 (refinement types), 6 (deep field assignment), 9 (tuple types), 18 (named return variables), and 19 (semicolon separator) implemented.  
+> Last updated: 2026-03-09 — items 2 (closures/lambdas), 17 (@on_fail), 16 (refinement types), 6 (deep field assignment), 9 (tuple types), 18 (named return variables), and 19 (semicolon separator) implemented.
+> Updated 2026-03-09 — items 14 (numeric literal forms: hex/binary/octal/digit separators) and 1 (module import system: recursive file loading, transitive imports, cycle detection) implemented.
+> Updated 2026-03-09 — demo scripts enhanced: `math_utils.aion` (shared utility module), `import-demo.aion` (multi-file import + all numeric literal forms), `bytecode-demo.aion` (numeric literals section); 160 passing tests across 6 suites.
 > Items 4, 7, 8, 11, 12 were implemented on 2026-03-06; items 15–18 added then.  
 > Code quality pass 2026-03-06 — `BytecodeVM` warnings resolved.  
 > Based on: grammar (`AionParser.g4`, `AionLexer.g4`), interpreter, bytecode VM, and `sample.aion`.
@@ -14,19 +16,18 @@ Each gap is rated by impact:
 
 ---
 
-## 1. Module system  🔴
+## 1. Module system  🔴 ✅ done (basic)
 
-**What's there:** `import foo.bar` parses, but the compiler and interpreter ignore it entirely —
-there is no file loading, no namespace, no re-export.
+**What's there:** `import foo.bar` now resolves `foo/bar.aion` relative to the importing
+file, parses it, and merges all its declarations into the current module before compilation.
+Transitive imports and cycle detection are supported.
 
-**What's missing:**
-- Loading imported files from disk at parse time
+**What's still missing:**
 - A module namespace (`foo.bar.MyType`, `foo.bar.add`)
 - Visibility control (`pub` / private by default)
 - Standard library modules (`std.io`, `std.str`, `std.collections`)
 
-**Impact:** Every real program beyond a single file is blocked.
-Without modules you cannot split logic across files, share types, or reuse utility functions.
+**Impact:** Multi-file programs now work. Namespace isolation and stdlib remain future work.
 
 ---
 
@@ -173,13 +174,13 @@ import std.io.{ read_file as read }
 
 ---
 
-## 14. Numeric literal forms  🟢
+## 14. Numeric literal forms  🟢 ✅ done
 
-**What's there:** All integers are `Long` (64-bit signed); `FLOAT_LIT` is `Double`.
+**What's there:** Digit separators (`1_000_000`), hex (`0xFF`), binary (`0b1010`), and
+octal (`0o17`) integer literals are now supported in the lexer and parsed correctly by
+`AstBuilder`. Both the interpreter and bytecode VM handle them transparently.
 
-**What's missing:**
-- Digit separators: `1_000_000`
-- Hex / binary / octal: `0xFF`, `0b1010`, `0o777`
+**What's still missing:**
 - Single-precision float: `1.5f`
 - Sized integer types: `i32`, `u8`, etc. (relevant for protocol work)
 
@@ -315,7 +316,7 @@ Allows porting code from semicolon-terminated languages without reformatting.
 
 | # | Feature | Priority | Effort | Status |
 |---|---------|:--------:|:------:|:------:|
-| 1 | Module system + file loading | 🔴 | Large | — |
+| 1 | Module system + file loading | 🔴 | Large | ✅ basic done |
 | 2 | Closures / lambdas | 🔴 | Medium | ✅ done |
 | 3 | Traits / interfaces | 🔴 | Large | — |
 | 4 | `?` error propagation | 🟠 | Small | ✅ done |
@@ -332,7 +333,7 @@ Allows porting code from semicolon-terminated languages without reformatting.
 | 18 | Named return variables | 🟢 | Small-Medium | ✅ done |
 | 12 | `const` declarations | 🟢 | Small | ✅ done |
 | 13 | Selective imports | 🟢 | Small | — |
-| 14 | Numeric literal forms | 🟢 | Small | — |
+| 14 | Numeric literal forms | 🟢 | Small | ✅ done |
 | 19 | Semicolon as inline statement separator | 🟢 | Tiny | ✅ done |
 
 ## Recommended implementation order

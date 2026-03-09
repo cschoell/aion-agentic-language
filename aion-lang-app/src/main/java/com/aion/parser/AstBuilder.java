@@ -23,6 +23,24 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
     }
     private Pos pos(org.antlr.v4.runtime.ParserRuleContext ctx) { return pos(ctx.getStart()); }
 
+    /** Parse an integer literal that may use 0x/0b/0o prefix or '_' digit separators. */
+    private long parseIntLit(String text) {
+        boolean negative = text.startsWith("-");
+        String s = negative ? text.substring(1) : text;
+        s = s.replace("_", "");
+        long value;
+        if (s.startsWith("0x") || s.startsWith("0X")) {
+            value = Long.parseLong(s.substring(2), 16);
+        } else if (s.startsWith("0b") || s.startsWith("0B")) {
+            value = Long.parseLong(s.substring(2), 2);
+        } else if (s.startsWith("0o") || s.startsWith("0O")) {
+            value = Long.parseLong(s.substring(2), 8);
+        } else {
+            value = Long.parseLong(s);
+        }
+        return negative ? -value : value;
+    }
+
     private String stripQuotes(String s) {
         return s.substring(1, s.length() - 1)
                 .replace("\\n", "\n").replace("\\r", "\r").replace("\\t", "\t")
@@ -157,7 +175,7 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
         if (ctx.ANN_ON_FAIL()     != null) return new Annotation.OnFail(stripQuotes(ctx.STR_LIT().getText()));
         if (ctx.ANN_REQUIRES()    != null) return new Annotation.Requires(buildExpr(ctx.expr()));
         if (ctx.ANN_ENSURES()     != null) return new Annotation.Ensures(buildExpr(ctx.expr()));
-        if (ctx.ANN_TIMEOUT()     != null) return new Annotation.Timeout(Long.parseLong(ctx.INT_LIT().getText()));
+        if (ctx.ANN_TIMEOUT()     != null) return new Annotation.Timeout(parseIntLit(ctx.INT_LIT().getText()));
         return new Annotation.Throws(convertTypeRef(ctx.typeRef()));
     }
 
@@ -348,8 +366,8 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
 
     private Expr buildPrimaryExpr(AionParser.PrimaryExprContext ctx) {
         return switch (ctx) {
-            case AionParser.IntLitContext    c -> new Expr.IntLit(Long.parseLong(c.INT_LIT().getText()), pos(c));
-            case AionParser.FloatLitContext  c -> new Expr.FloatLit(Double.parseDouble(c.FLOAT_LIT().getText()), pos(c));
+            case AionParser.IntLitContext    c -> new Expr.IntLit(parseIntLit(c.INT_LIT().getText()), pos(c));
+            case AionParser.FloatLitContext  c -> new Expr.FloatLit(Double.parseDouble(c.FLOAT_LIT().getText().replace("_", "")), pos(c));
             case AionParser.StrLitContext    c -> new Expr.StrLit(stripQuotes(c.STR_LIT().getText()), pos(c));
             case AionParser.InterpStrLitContext c -> buildInterpStr(c.INTERP_STR().getText(), pos(c));
             case AionParser.BoolTrueContext  c -> new Expr.BoolLit(true,  pos(c));
@@ -502,7 +520,7 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
     private Pattern convertPattern(AionParser.PatternContext ctx) {
         return switch (ctx) {
             case AionParser.WildcardPatternContext  ignored -> new Pattern.Wildcard();
-            case AionParser.IntPatternContext   c -> new Pattern.IntPat(Long.parseLong(c.INT_LIT().getText()));
+            case AionParser.IntPatternContext   c -> new Pattern.IntPat(parseIntLit(c.INT_LIT().getText()));
             case AionParser.FloatPatternContext c -> new Pattern.FloatPat(Double.parseDouble(c.FLOAT_LIT().getText()));
             case AionParser.StrPatternContext   c -> new Pattern.StrPat(stripQuotes(c.STR_LIT().getText()));
             case AionParser.TruePatternContext  ignored -> new Pattern.BoolPat(true);

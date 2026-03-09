@@ -7,7 +7,9 @@ import org.antlr.v4.runtime.tree.ParseTree;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Entry point for parsing Aion source text into an AST.
@@ -29,6 +31,51 @@ public final class AionFrontend {
     public static ParseResult parseFile(Path path) throws IOException {
         CharStream stream = CharStreams.fromPath(path);
         return parse(stream, path.getFileName().toString());
+    }
+
+    /**
+     * Parse {@code path} and recursively resolve all {@code import} declarations,
+     * merging every imported module's declarations (in import order, depth-first)
+     * into a single flat {@link Node.Module}.  Cycles are detected and reported
+     * as parse errors rather than causing infinite recursion.
+     */
+    public static ParseResult parseFileWithImports(Path path) throws IOException {
+        List<String> errors = new ArrayList<>();
+        List<Node> allDecls = new ArrayList<>();
+        Set<Path> visited = new LinkedHashSet<>();
+        loadRecursive(path.toAbsolutePath().normalize(), errors, allDecls, visited);
+        if (!errors.isEmpty()) return new ParseResult(null, errors);
+        Node.Module merged = new Node.Module(allDecls, "<merged>");
+        return new ParseResult(merged, errors);
+    }
+
+    private static void loadRecursive(Path path, List<String> errors,
+                                      List<Node> allDecls, Set<Path> visited) throws IOException {
+        if (visited.contains(path)) {
+            errors.add("Cyclic import detected: " + path);
+            return;
+        }
+        visited.add(path);
+
+        ParseResult result = parseFile(path);
+        if (result.hasErrors()) { errors.addAll(result.errors()); return; }
+
+        Path dir = path.getParent();
+        for (Node decl : result.module().decls()) {
+            if (decl instanceof Node.ImportDecl imp) {
+                // Resolve  import a.b.c  →  <dir>/a/b/c.aion
+                String rel = String.join("/", imp.path()) + ".aion";
+                Path imported = (dir != null ? dir.resolve(rel) : Path.of(rel)).normalize();
+                if (!imported.toFile().exists()) {
+                    errors.add("Cannot find imported module '" + String.join(".", imp.path())
+                            + "' at " + imported);
+                    return;
+                }
+                loadRecursive(imported, errors, allDecls, visited);
+            } else {
+                allDecls.add(decl);
+            }
+        }
     }
 
     public static ParseResult parseString(String source, String sourceName) {
