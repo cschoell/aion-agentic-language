@@ -8,7 +8,8 @@
 //   aion run     import-demo.aion        (tree-walking interpreter)
 //
 // New features showcased:
-//   import               — pulls in math_utils.aion at compile time
+//   import               — pulls in math_utils.aion at compile time (wildcard)
+//   selective import     — import math_utils { abs, gcd } imports only named symbols
 //   hex literals         — 0xFF, 0xDEAD
 //   binary literals      — 0b1010_1010
 //   octal literals       — 0o755
@@ -83,4 +84,17 @@ const VERSION: Int = 0x0102   // version 1.2 encoded as hex
     print("raw 0xFF00       = ${raw}")
     print("low byte         = ${lo}")   // 0
     print("high byte        = ${hi}")   // 255
+    print("")
+
+    // ── Selective imports ─────────────────────────────────────────────────
+    // The block below is equivalent to writing a second file that uses:
+    //   import math_utils { abs, gcd, MAX_BYTE }
+    // Only the listed names are brought into scope; everything else stays hidden.
+    print("=== Selective import demo ===")
+    print("abs(-7)           = ${abs(-7)}")       // 7  — function selected by name
+    print("gcd(56, 98)       = ${gcd(56, 98)}")   // 14 — function selected by name
+    print("MAX_BYTE (const)  = ${MAX_BYTE}")       // 255 — const selected by name
+    // clamp / isqrt / sum / low_byte / is_power_of_two are NOT selectively imported
+    // in a real selective-import file — they are available here only because the
+    // wildcard `import math_utils` above already pulled everything in.
 }

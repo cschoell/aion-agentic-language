@@ -37,7 +37,12 @@ constDecl
 
 // ── Imports ───────────────────────────────────────────────────────────────────
 importDecl
-    : IMPORT modulePath (AS IDENT)?
+    : IMPORT modulePath (AS IDENT)? (LBRACE importName (COMMA importName)* RBRACE)?
+    ;
+
+importName
+    : IDENT
+    | TYPE_IDENT
     ;
 
 modulePath

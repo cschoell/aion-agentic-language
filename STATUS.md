@@ -1,6 +1,6 @@
 # Status
 
-**Version:** 0.4.0-dev
+**Version:** 0.5.0-dev
 **State:** Proof-of-concept · Tree-walking interpreter + bytecode compiler/VM · Pre-type-checker
 
 ---
@@ -58,14 +58,14 @@
 - [x] `aion repl` — interactive REPL with multi-line brace-depth tracking
 - [x] `aion compile` — compile and execute via the bytecode VM
 - [x] Gradle build with ANTLR4 code generation (`generateAntlr` task)
-- [x] **160 passing unit tests** across 6 suites: `AionLanguageTest` (18), `BytecodeCompilerTest` (40), `InterpreterQaTest` (5), `SmallFeaturesTest` (30), `ModuleImportTest` (7), `ResourceScriptE2ETest` (60)
+- [x] **165 passing unit tests** across 6 suites: `AionLanguageTest` (18), `BytecodeCompilerTest` (40), `InterpreterQaTest` (5), `SmallFeaturesTest` (30), `ModuleImportTest` (12), `ResourceScriptE2ETest` (60)
 - [x] `sample.aion` — full demo program
 - [x] `bytecode-demo.aion` — bytecode-path demo with numeric literal forms
 - [x] `math_utils.aion` — shared utility module (abs, clamp, isqrt, sum, gcd, low_byte, is_power_of_two)
 - [x] `import-demo.aion` — multi-file import demo with all numeric literal forms
 
 ### Documentation
-- [x] `docs/missing-features.md` — gap analysis rated by impact (items #1 and #14 implemented)
+- [x] `docs/missing-features.md` — gap analysis rated by impact (items #1, #13, and #14 implemented)
 - [x] `docs/Aion Agent Ecosystem Technical Breakdown.md` — A2A protocol, registry, arbitration, researcher-alpha manifest
 - [x] `.github/copilot-instructions.md` — architecture overview, key file map, feature checklist, build commands
 
@@ -80,6 +80,7 @@
 - [ ] **Tuple type** — lightweight anonymous product type `(Int, Str, Bool)` without field names
 - [ ] **Range expressions** — `0..10`, `0..=10` for use in `for` loops and slices
 - [x] **Import resolution** — `parseFileWithImports`: recursive file loading, transitive imports, cycle detection (`import math_utils` works end-to-end)
+- [x] **Selective imports** — `import foo { bar, baz }` syntax; filters to named declarations only; supports functions, consts, types, enums
 - [ ] **Import namespacing / re-export** — explicit namespace prefixes and `export` keyword
 - [ ] **Exhaustiveness checking** — static verification that `match` covers all enum variants
 - [ ] **`@requires` / `@ensures` runtime enforcement** — VM checks pre/post conditions and raises `ConstraintViolation`

@@ -79,7 +79,10 @@ Both tests must pass before the change is considered complete.
 7. **BytecodeCompiler** — emit instructions for new nodes.
 8. **BytecodeVM** — execute new `Instruction` variants.
 9. **Tests** — add tests in both `SmallFeaturesTest` and `BytecodeCompilerTest`.
-10. **Docs** — update `docs/missing-features.md` and `CHANGELOG.md`.
+10. **Demo scripts** — update at least one `.aion` file under `src/main/resources/` to
+    demonstrate the new feature (e.g. `import-demo.aion`, `bytecode-demo.aion`).
+    If the E2E test `ResourceScriptE2ETest` covers that script, update its expected output too.
+11. **Docs** — update `docs/missing-features.md` and `CHANGELOG.md`.
 
 ---
 

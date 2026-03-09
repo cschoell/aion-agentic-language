@@ -332,7 +332,7 @@ Allows porting code from semicolon-terminated languages without reformatting.
 | 11 | Pattern guards | 🟡 | Small | ✅ done |
 | 18 | Named return variables | 🟢 | Small-Medium | ✅ done |
 | 12 | `const` declarations | 🟢 | Small | ✅ done |
-| 13 | Selective imports | 🟢 | Small | — |
+| 13 | Selective imports | 🟢 | Small | ✅ done |
 | 14 | Numeric literal forms | 🟢 | Small | ✅ done |
 | 19 | Semicolon as inline statement separator | 🟢 | Tiny | ✅ done |
 
@@ -353,8 +353,8 @@ Sorted by effort within each priority tier, prerequisites noted:
 11. ~~**Tuple types**~~ ✅ **done** *(medium — prerequisite for named returns and destructuring)*
 12. ~~**Deep field assignment**~~ ✅ **done** *(medium — unblocks record mutation patterns)*
 13. ~~**Semicolon statement separator**~~ ✅ **done** *(tiny — optional `;` after any stmt in a block)*
-14. **Module file loading** *(large — prerequisite for all multi-file programs)*
-14. **Traits** *(large — prerequisite for generic contracts)*
-15. **Generic functions** *(large — builds on traits)*
-16. **Refinement type bytecode injection** *(medium — emit `CheckConstraint` in the compiler)*
-17. **`@async` / concurrency** *(large — needs scheduler, best done last)*
+14. ~~**Selective imports**~~ ✅ **done** *(small — `import foo { bar, baz }` syntax)*
+15. **Traits** *(large — prerequisite for generic contracts)*
+16. **Generic functions** *(large — builds on traits)*
+17. **Refinement type bytecode injection** *(medium — emit `CheckConstraint` in the compiler)*
+18. **`@async` / concurrency** *(large — needs scheduler, best done last)*

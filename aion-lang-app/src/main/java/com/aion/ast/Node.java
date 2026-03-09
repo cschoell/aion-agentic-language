@@ -10,7 +10,7 @@ public interface Node {
     // ── Top-level ─────────────────────────────────────────────────────────────
     record Module(List<Node> decls, String sourceName) implements Node {}
 
-    record ImportDecl(List<String> path, String alias, Pos pos) implements Node {}
+    record ImportDecl(List<String> path, String alias, List<String> names, Pos pos) implements Node {}
 
     /** Module-level constant: const NAME: Type = expr */
     record ConstDecl(String name, TypeRef type, Expr value, Pos pos) implements Node {}

@@ -81,7 +81,10 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
         List<String> path = new ArrayList<>();
         for (var id : ctx.modulePath().IDENT()) path.add(id.getText());
         String alias = ctx.AS() != null ? ctx.IDENT().getText() : null;
-        return new ImportDecl(path, alias, pos(ctx));
+        // Selective imports: import foo { bar, baz }  — importName rules hold the names
+        List<String> names = new ArrayList<>();
+        for (var n : ctx.importName()) names.add(n.getText());
+        return new ImportDecl(path, alias, names, pos(ctx));
     }
 
     // ── Types ─────────────────────────────────────────────────────────────────

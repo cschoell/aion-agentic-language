@@ -5,6 +5,28 @@ Versioning follows **date-based** releases while the project is pre-1.0.
 
 ---
 
+## [0.5.0] — 2026-03-09 · Selective imports
+
+### Language
+- **Selective imports** (feature #13) — `import foo { bar, baz }` syntax imports only the
+  named declarations from a module. Works for functions, consts, types, and enums. Both
+  lowercase (`IDENT`) and uppercase (`TYPE_IDENT`) names are supported in the name list.
+
+### Grammar / Parser
+- `AionParser.g4` — `importDecl` extended with optional `LBRACE importName (COMMA importName)* RBRACE`;
+  new `importName` rule accepts both `IDENT` and `TYPE_IDENT`.
+- `AstBuilder` — `visitImportDecl` now populates `ImportDecl.names` from `ctx.importName()`.
+- `Node.ImportDecl` — added `List<String> names` field (empty = import all).
+- `AionFrontend.loadRecursive` — when `names` is non-empty, loads the module into a
+  temporary list and filters to only the requested declarations before merging.
+
+### Tests
+- 5 new tests in `ModuleImportTest`: selective function import (interpreter + bytecode),
+  selective const import, multiple selective names, and exclusion verification.
+- Total: **165 passing tests** across 6 suites.
+
+---
+
 ## [0.4.0] — 2026-03-09 · Demo scripts, numeric literals & module imports
 ### Language
 - **Numeric literal forms** — hex (`0xFF`), binary (`0b1010`), octal (`0o755`), and underscore digit separators (`1_000_000`) in both the lexer and `AstBuilder`.

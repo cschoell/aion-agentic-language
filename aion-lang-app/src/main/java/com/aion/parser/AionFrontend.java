@@ -71,11 +71,36 @@ public final class AionFrontend {
                             + "' at " + imported);
                     return;
                 }
-                loadRecursive(imported, errors, allDecls, visited);
+                if (imp.names().isEmpty()) {
+                    // import all declarations from the module
+                    loadRecursive(imported, errors, allDecls, visited);
+                } else {
+                    // selective import: only bring in the named declarations
+                    List<Node> selective = new ArrayList<>();
+                    loadRecursive(imported, errors, selective, new LinkedHashSet<>(visited));
+                    Set<String> wanted = new java.util.HashSet<>(imp.names());
+                    for (Node d : selective) {
+                        String dname = declName(d);
+                        if (dname != null && wanted.contains(dname)) allDecls.add(d);
+                    }
+                    // mark the file visited so it won't be re-imported wholesale later
+                    visited.add(imported.toAbsolutePath().normalize());
+                }
             } else {
                 allDecls.add(decl);
             }
         }
+    }
+
+    /** Returns the declared name of a top-level node, or null if it has none. */
+    private static String declName(Node decl) {
+        return switch (decl) {
+            case Node.FnDecl fn       -> fn.name();
+            case Node.ConstDecl c     -> c.name();
+            case Node.TypeDecl t      -> t.name();
+            case Node.EnumDecl e      -> e.name();
+            default                   -> null;
+        };
     }
 
     public static ParseResult parseString(String source, String sourceName) {
