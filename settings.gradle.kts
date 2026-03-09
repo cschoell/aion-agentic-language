@@ -14,4 +14,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "aion-lang"
 include(":aion-lang-app")
+include(":aion-lang-intellij")
 

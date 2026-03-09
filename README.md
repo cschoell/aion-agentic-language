@@ -2,7 +2,7 @@
 
 A programming language designed to be **optimal for AI agents to generate and reason about**, while remaining readable for humans.
 
-> **Version 0.7.0-dev** — Tree-walking interpreter + bytecode compiler/VM · 231 passing tests · Multi-file imports · Pre-type-checker
+> **Version 0.7.0-dev** — Tree-walking interpreter + bytecode compiler/VM · 231 passing tests � IntelliJ plugin · Multi-file imports · Pre-type-checker
 
 ## Design Principles
 
@@ -365,11 +365,46 @@ aion-lang/
 │       │   ├── BytecodeVM.java           # Stack machine executor
 │       │   └── VmValue.java              # VM runtime value types
 │       └── cli/AionCli.java              # CLI (picocli): run, compile, test, check
+├── aion-lang-intellij/                   # IntelliJ Platform plugin
+│   └── src/main/kotlin/com/aion/intellij/
+│       ├── AionLanguage.kt               # Language singleton
+│       ├── AionFileType.kt               # .aion file type
+│       ├── AionLexer.kt                  # Hand-written highlighting lexer
+│       ├── AionSyntaxHighlighter.kt      # Token → color mapping
+│       ├── AionColorSettingsPage.kt      # Settings → Color Scheme → Aion
+│       ├── AionCommenter.kt              # Line/block comment actions
+│       ├── AionBraceMatcher.kt           # {} [] () matching
+│       ├── AionParserDefinition.kt       # PSI registration
+│       └── AionFile.kt                   # PSI file node
 └── aion-lang-app/src/main/resources/
     ├── sample.aion                       # Full feature demo
     ├── bytecode-demo.aion                # Bytecode compiler demo
     ├── import-demo.aion                  # Module import + numeric literals demo
     └── math_utils.aion                   # Shared utility module (imported by demos)
+```
+
+---
+
+## IntelliJ Plugin
+
+The `aion-lang-intellij` module is a full IntelliJ Platform plugin providing:
+
+| Feature | Details |
+|---|---|
+| **Syntax highlighting** | Keywords, built-ins, annotations, type names, numbers (hex/bin/oct), strings, comments, operators |
+| **Color scheme page** | *Settings → Editor → Color Scheme → Aion* — 14 customisable token categories |
+| **Brace matching** | `{}`, `[]`, `()` — structural pair for `{}` enables smart indent |
+| **Line/block commenting** | `// ` line comment · `/* … */` block comment via standard IDE actions |
+| **File type** | `.aion` extension registered; recognised in Project view and editor tabs |
+
+### Build & install the plugin
+
+```powershell
+# Build the installable ZIP
+.\gradlew.bat :aion-lang-intellij:buildPlugin
+# Output: aion-lang-intellij/build/distributions/aion-lang-intellij-0.12.0.zip
+
+# Install: Settings → Plugins → ⚙ → Install Plugin from Disk → select the ZIP
 ```
 
 ---

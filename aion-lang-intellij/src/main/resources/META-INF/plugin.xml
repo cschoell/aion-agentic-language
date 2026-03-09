@@ -1,0 +1,44 @@
+<idea-plugin>
+    <id>com.aion.intellij</id>
+    <name>Aion Language</name>
+    <vendor>Aion Lang</vendor>
+    <description>Syntax highlighting, brace matching, and code commenting for the Aion language (.aion files).</description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+
+        <!-- File type -->
+        <fileType
+            name="Aion"
+            implementationClass="com.aion.intellij.AionFileType"
+            fieldName="INSTANCE"
+            language="Aion"
+            extensions="aion"/>
+
+        <!-- Language -->
+        <lang.parserDefinition
+            language="Aion"
+            implementationClass="com.aion.intellij.AionParserDefinition"/>
+
+        <!-- Syntax highlighting -->
+        <lang.syntaxHighlighterFactory
+            language="Aion"
+            implementationClass="com.aion.intellij.AionSyntaxHighlighterFactory"/>
+
+        <!-- Color settings page -->
+        <colorSettingsPage
+            implementation="com.aion.intellij.AionColorSettingsPage"/>
+
+        <!-- Commenter -->
+        <lang.commenter
+            language="Aion"
+            implementationClass="com.aion.intellij.AionCommenter"/>
+
+        <!-- Brace matcher -->
+        <lang.braceMatcher
+            language="Aion"
+            implementationClass="com.aion.intellij.AionBraceMatcher"/>
+
+    </extensions>
+</idea-plugin>

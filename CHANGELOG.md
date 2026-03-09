@@ -5,6 +5,39 @@ Versioning follows **date-based** releases while the project is pre-1.0.
 
 ---
 
+## [0.12.0] — 2026-03-09 · IntelliJ plugin
+
+### Tooling
+- **`aion-lang-intellij` Gradle module** — new IntelliJ Platform plugin built with
+  `org.jetbrains.intellij.platform` v2 and Kotlin; targets IntelliJ IDEA 2024.1+.
+- **Syntax highlighting** — hand-written `AionLexer` (extends `LexerBase`) tokenises all
+  Aion constructs: keywords, built-in functions, annotations (`@pure`, `@io`, …), type
+  names (upper-case identifiers), numbers (decimal, hex `0x`, binary `0b`, octal `0o`,
+  underscore separators), strings, line/block comments, operators, braces, commas,
+  semicolons.
+- **`AionSyntaxHighlighter` + `AionSyntaxHighlighterFactory`** — maps each token type to
+  a `DefaultLanguageHighlighterColors` fallback; all colours customisable via
+  *Settings → Editor → Color Scheme → Aion*.
+- **`AionColorSettingsPage`** — 14 named attribute descriptors with a live demo snippet.
+- **`AionCommenter`** — line comment `// `, block comment `/* … */`; wired to
+  *Code → Comment with Line Comment* / *Block Comment* actions.
+- **`AionBraceMatcher`** — paired matching for `{}`, `[]`, `()`; structural brace pair
+  for `{}` enables smart indent.
+- **`AionParserDefinition`** — registers the language with the PSI infrastructure; flat
+  no-op parser (full PSI tree is a future milestone).
+- **`AionFile` / `AionFileType` / `AionLanguage`** — file type registered for `.aion`
+  extension; icon reuses `AllIcons.FileTypes.Text`.
+- **`plugin.xml`** — wires all extension points under `com.intellij.modules.platform`.
+- **`buildPlugin`** produces `aion-lang-intellij-0.12.0.zip`; installable via
+  *Settings → Plugins → Install Plugin from Disk*.
+
+### Docs
+- `STATUS.md` — IntelliJ plugin added to ✅ Tooling and moved from 🔲 Planned.
+- `CHANGELOG.md` — this entry.
+- `README.md` — plugin section added.
+
+---
+
 ## [0.11.0] — 2026-03-09 · Math builtins + extended list methods
 
 ### Language
