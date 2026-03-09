@@ -32,6 +32,7 @@ public sealed interface Instruction permits
         Instruction.CallMethod,
         Instruction.Break, Instruction.Continue, Instruction.Stringify,
         Instruction.Throw,
+        Instruction.MakeRange,
         Instruction.Halt {
 
     // ── Literals ─────────────────────────────────────────────────────────────
@@ -187,4 +188,8 @@ public sealed interface Instruction permits
 
     // ── Meta ──────────────────────────────────────────────────────────────────
     record Halt() implements Instruction {}
+
+    // ── Range ─────────────────────────────────────────────────────────────────
+    /** Pop to (TOS) and from (TOS-1); push a ListVal of integers [from..to). inclusive=true → [from..=to]. */
+    record MakeRange(boolean inclusive) implements Instruction {}
 }

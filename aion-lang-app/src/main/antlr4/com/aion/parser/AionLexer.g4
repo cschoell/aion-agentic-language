@@ -77,7 +77,8 @@ COLON       : ':' ;
 DCOLON      : '::' ;
 COMMA       : ',' ;
 DOT         : '.' ;
-DOTDOT      : '..' ;
+DOTDOTEQ    : '..=' ;   // inclusive range
+DOTDOT      : '..' ;    // exclusive range
 EQ          : '=' ;
 EQEQ        : '==' ;
 NEQ         : '!=' ;

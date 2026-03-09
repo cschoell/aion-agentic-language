@@ -320,6 +320,11 @@ public class BytecodeCompiler {
             case UntrustedExpr e -> compileExpr(e.inner());
             case InterpolatedStr e -> compileInterpStr(e);
             case Lambda e -> compileLambda(e);
+            case Expr.RangeLit e -> {
+                compileExpr(e.from());
+                compileExpr(e.to());
+                emit(new Instruction.MakeRange(e.inclusive()));
+            }
         }
     }
 

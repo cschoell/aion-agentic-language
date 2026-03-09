@@ -5,6 +5,41 @@ Versioning follows **date-based** releases while the project is pre-1.0.
 
 ---
 
+## [0.6.0] — 2026-03-09 · Range expressions
+
+### Language
+- **Range expressions** (feature #15) — `from..to` (exclusive) and `from..=to` (inclusive)
+  range literals. Ranges evaluate to a `List[Int]` and work in `for … in` loops or anywhere
+  a list is expected. Both interpreter and bytecode VM supported.
+
+### Grammar / Parser
+- `AionLexer.g4` — new `DOTDOTEQ` (`..=`) token (placed before `DOTDOT` to avoid ambiguity).
+- `AionParser.g4` — `expr` rule extended with `ExclusiveRange` and `InclusiveRange` alternatives
+  using `pipeExpr` operands to avoid left-recursion.
+- `Node.Expr.RangeLit` — new AST node with `from`, `to`, `inclusive`, `pos` fields.
+- `AstBuilder.buildExpr` — dispatches on `ExclusiveRangeContext` / `InclusiveRangeContext` /
+  `ExprPipeContext`.
+
+### Interpreter
+- `Interpreter.evalExpr` — `RangeLit` case materialises a `ListVal` of `IntVal` elements.
+
+### Bytecode
+- `Instruction.MakeRange(boolean inclusive)` — new instruction; pops `to` and `from`, pushes `ListVal`.
+- `BytecodeCompiler` — emits `MakeRange` for `Expr.RangeLit`.
+- `BytecodeVM` — executes `MakeRange`.
+
+### Tests
+- 5 new interpreter tests in `SmallFeaturesTest` (exclusive/inclusive for-loop, range as list,
+  variable bounds, sum 1..=10).
+- 4 new bytecode tests in `BytecodeCompilerTest`.
+- Total: **174 passing tests** across 6 suites.
+
+### Demo
+- `bytecode-demo.aion` — new range expressions section: `sum(1..=10)`, `digits 0..5`, even-sum.
+- `ResourceScriptE2ETest` expected output updated.
+
+---
+
 ## [0.5.0] — 2026-03-09 · Selective imports
 
 ### Language

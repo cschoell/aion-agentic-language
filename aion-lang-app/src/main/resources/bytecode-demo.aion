@@ -6,7 +6,8 @@
 //   const, string interp, break, continue, recursion,
 //   lambda (map/filter), @on_fail, tuples, named return,
 //   deep field assignment, semicolon statement separator,
-//   hex / binary / octal literals, underscore digit separators
+//   hex / binary / octal literals, underscore digit separators,
+//   range expressions (.. exclusive, ..= inclusive)
 
 const GREETING: Str = "Aion bytecode"
 const LIMIT: Int = 4
@@ -142,4 +143,16 @@ fn abs_clamp(n: Int) -> (clamped: Int) {
     mut acc = 0; mut k = 1
     while k <= 5 { acc = acc + k; k = k + 1 }
     print("sum(1..5) = ${acc}")
+
+    // -- range expressions: exclusive (..) and inclusive (..=) --
+    mut range_sum = 0
+    for n in 1..=10 { range_sum = range_sum + n }
+    print("sum(1..=10) = ${range_sum}")
+    let digits = 0..5
+    print("digits 0..5 = ${digits}")
+    mut evens_sum = 0
+    for n in 0..10 {
+        if n % 2 == 0 { evens_sum = evens_sum + n }
+    }
+    print("even sum 0..10 = ${evens_sum}")
 }

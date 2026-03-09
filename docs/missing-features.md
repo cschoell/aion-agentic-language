@@ -4,6 +4,7 @@
 > Last updated: 2026-03-09 — items 2 (closures/lambdas), 17 (@on_fail), 16 (refinement types), 6 (deep field assignment), 9 (tuple types), 18 (named return variables), and 19 (semicolon separator) implemented.
 > Updated 2026-03-09 — items 14 (numeric literal forms: hex/binary/octal/digit separators) and 1 (module import system: recursive file loading, transitive imports, cycle detection) implemented.
 > Updated 2026-03-09 — demo scripts enhanced: `math_utils.aion` (shared utility module), `import-demo.aion` (multi-file import + all numeric literal forms), `bytecode-demo.aion` (numeric literals section); 160 passing tests across 6 suites.
+> Updated 2026-03-09 — items 13 (selective imports) and 15 (range expressions: `from..to` / `from..=to`) implemented; 174 passing tests across 6 suites.
 > Items 4, 7, 8, 11, 12 were implemented on 2026-03-06; items 15–18 added then.  
 > Code quality pass 2026-03-06 — `BytecodeVM` warnings resolved.  
 > Based on: grammar (`AionParser.g4`, `AionLexer.g4`), interpreter, bytecode VM, and `sample.aion`.

@@ -129,7 +129,7 @@ public interface Node {
             Expr.Match, Expr.BlockExpr, Expr.ListLit, Expr.MapLit,
             Expr.TupleLit,
             Expr.Propagate, Expr.TrustedExpr, Expr.UntrustedExpr,
-            Expr.InterpolatedStr, Expr.Lambda {
+            Expr.InterpolatedStr, Expr.Lambda, Expr.RangeLit {
 
         record IntLit(long value, Pos pos)          implements Expr {}
         record FloatLit(double value, Pos pos)      implements Expr {}
@@ -175,6 +175,8 @@ public interface Node {
          * Can be stored in a variable, passed as an argument, or used inline.
          */
         record Lambda(List<Param> params, TypeRef returnType, Stmt.Block body, Pos pos) implements Expr {}
+        /** Range literal: {@code from..to} (exclusive) or {@code from..=to} (inclusive). */
+        record RangeLit(Expr from, Expr to, boolean inclusive, Pos pos) implements Expr {}
     }
 
     /** A match arm with an optional guard: pattern [if guard] => body */

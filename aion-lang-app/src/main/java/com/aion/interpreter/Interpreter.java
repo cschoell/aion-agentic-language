@@ -281,6 +281,7 @@ public final class Interpreter {
         AionValue iter = evalExpr(s.iterable(), env);
         List<AionValue> items = switch (iter) {
             case AionValue.ListVal l -> l.elements();
+            case AionValue.TupleVal t -> t.elements();
             default -> throw new AionRuntimeException("Cannot iterate over " + iter);
         };
         for (AionValue item : new ArrayList<>(items)) {
@@ -376,6 +377,14 @@ public final class Interpreter {
                         List.of(), "__lambda__", List.of(),
                         e.params(), e.returnType(), null, e.body(), e.pos());
                 yield new AionValue.FnVal(synth, env);
+            }
+            case Expr.RangeLit e -> {
+                long from = ((AionValue.IntVal) evalExpr(e.from(), env)).value();
+                long to   = ((AionValue.IntVal) evalExpr(e.to(),   env)).value();
+                List<AionValue> elems = new ArrayList<>();
+                long end = e.inclusive() ? to + 1 : to;
+                for (long i = from; i < end; i++) elems.add(new AionValue.IntVal(i));
+                yield new AionValue.ListVal(elems);
             }
         };
     }

@@ -266,7 +266,15 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
     // ── Expressions ───────────────────────────────────────────────────────────
 
     private Expr buildExpr(AionParser.ExprContext ctx) {
-        return buildPipeExpr(ctx.pipeExpr());
+        return switch (ctx) {
+            case AionParser.ExclusiveRangeContext c ->
+                new Expr.RangeLit(buildPipeExpr(c.pipeExpr(0)), buildPipeExpr(c.pipeExpr(1)), false, pos(c));
+            case AionParser.InclusiveRangeContext c ->
+                new Expr.RangeLit(buildPipeExpr(c.pipeExpr(0)), buildPipeExpr(c.pipeExpr(1)), true, pos(c));
+            case AionParser.ExprPipeContext c ->
+                buildPipeExpr(c.pipeExpr());
+            default -> throw new AionParseException("Unknown expr context: " + ctx.getClass().getSimpleName(), pos(ctx));
+        };
     }
 
     private Expr buildPipeExpr(AionParser.PipeExprContext ctx) {

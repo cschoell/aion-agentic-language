@@ -661,4 +661,41 @@ class BytecodeCompilerTest {
             }
             """)).isEqualTo("20");
     }
+
+    // ── Range expressions (feature #15) ──────────────────────────────────────
+
+    @Test void bc_exclusive_range_for_loop() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                for i in 0..5 { print(i) }
+            }
+            """)).isEqualTo("0\n1\n2\n3\n4");
+    }
+
+    @Test void bc_inclusive_range_for_loop() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                for i in 1..=3 { print(i) }
+            }
+            """)).isEqualTo("1\n2\n3");
+    }
+
+    @Test void bc_range_sum() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                mut sum = 0
+                for i in 1..=10 { sum = sum + i }
+                print(sum)
+            }
+            """)).isEqualTo("55");
+    }
+
+    @Test void bc_range_as_list() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                let xs = 0..4
+                print(xs)
+            }
+            """)).isEqualTo("[0, 1, 2, 3]");
+    }
 }

@@ -592,6 +592,58 @@ class SmallFeaturesTest {
         assertThat(out).containsExactly("20");
     }
 
+    // ── Range expressions (feature #15) ──────────────────────────────────────
+
+    @Test void exclusive_range_for_loop() {
+        var out = run("""
+            @pure fn main() -> Unit {
+                for i in 0..5 { print(i) }
+            }
+            """);
+        assertThat(out).containsExactly("0", "1", "2", "3", "4");
+    }
+
+    @Test void inclusive_range_for_loop() {
+        var out = run("""
+            @pure fn main() -> Unit {
+                for i in 1..=3 { print(i) }
+            }
+            """);
+        assertThat(out).containsExactly("1", "2", "3");
+    }
+
+    @Test void range_as_list_value() {
+        var out = run("""
+            @pure fn main() -> Unit {
+                let xs = 0..4
+                print(xs)
+            }
+            """);
+        assertThat(out).containsExactly("[0, 1, 2, 3]");
+    }
+
+    @Test void range_with_variable_bounds() {
+        var out = run("""
+            @pure fn main() -> Unit {
+                let start = 2
+                let end   = 5
+                for i in start..end { print(i) }
+            }
+            """);
+        assertThat(out).containsExactly("2", "3", "4");
+    }
+
+    @Test void range_sum() {
+        var out = run("""
+            @pure fn main() -> Unit {
+                mut sum = 0
+                for i in 1..=10 { sum = sum + i }
+                print(sum)
+            }
+            """);
+        assertThat(out).containsExactly("55");
+    }
+
     // ── Deep field assignment (feature #6) ────────────────────────────────────
 
     @Test void deep_field_assignment_interpreter() {

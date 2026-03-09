@@ -163,7 +163,10 @@ class ResourceScriptE2ETest {
             "MILLION  1_000_000   = 1000000",
             "0xDEAD = 57005, 0xDEAD / 0x10 = 3562",
             "p + q = 7",
-            "sum(1..5) = 15"
+            "sum(1..5) = 15",
+            "sum(1..=10) = 55",
+            "digits 0..5 = [0, 1, 2, 3, 4]",
+            "even sum 0..10 = 20"
     );
 
     @Test void bytecode_demo_interpreter() throws Exception {

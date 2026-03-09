@@ -279,6 +279,16 @@ public class BytecodeVM {
             case Instruction.Continue ignored -> throw new RuntimeException("BUG: unpatched Continue");
             case Instruction.Stringify ignored -> stack.push(format(stack.pop()));
 
+            // ── Range ─────────────────────────────────────────────────────────
+            case Instruction.MakeRange mr -> {
+                long to   = (Long) stack.pop();
+                long from = (Long) stack.pop();
+                long end  = mr.inclusive() ? to + 1 : to;
+                ArrayList<Object> elems = new ArrayList<>();
+                for (long i = from; i < end; i++) elems.add(i);
+                stack.push(new ListVal(elems));
+            }
+
             // ── Meta ──────────────────────────────────────────────────────────
             case Instruction.Halt ignored -> { return total; }
         }

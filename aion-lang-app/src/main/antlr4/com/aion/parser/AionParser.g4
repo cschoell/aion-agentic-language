@@ -193,7 +193,9 @@ forStmt
 
 // ── Expressions (precedence encoded via rule hierarchy) ───────────────────────
 expr
-    : pipeExpr
+    : pipeExpr DOTDOT  pipeExpr    # ExclusiveRange
+    | pipeExpr DOTDOTEQ pipeExpr   # InclusiveRange
+    | pipeExpr                     # ExprPipe
     ;
 
 pipeExpr
@@ -287,6 +289,7 @@ namedArg
 listLit
     : LBRACKET (expr (COMMA expr)* COMMA?)? RBRACKET
     ;
+
 
 mapLit
     : LBRACE (mapEntry (COMMA mapEntry)* COMMA?)? RBRACE
