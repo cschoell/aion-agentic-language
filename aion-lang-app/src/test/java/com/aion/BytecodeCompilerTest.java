@@ -858,4 +858,81 @@ class BytecodeCompilerTest {
             }
             """)).isEqualTo("37");
     }
+
+    // ── Math builtins (bytecode) ──────────────────────────────────────────────
+
+    @Test void bc_math_abs() {
+        assertThat(run("""
+            @pure fn main() -> Unit { print(abs(-5)) }
+            """)).isEqualTo("5");
+    }
+
+    @Test void bc_math_min_max() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                print(min(2, 9))
+                print(max(2, 9))
+            }
+            """)).isEqualTo("2\n9");
+    }
+
+    @Test void bc_math_pow() {
+        assertThat(run("""
+            @pure fn main() -> Unit { print(pow(3, 4)) }
+            """)).isEqualTo("81.0");
+    }
+
+    @Test void bc_math_sqrt_floor_ceil() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                print(sqrt(9.0))
+                print(floor(2.9))
+                print(ceil(2.1))
+            }
+            """)).isEqualTo("3.0\n2\n3");
+    }
+
+    // ── List methods (bytecode) ───────────────────────────────────────────────
+
+    @Test void bc_list_reduce() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                let nums = [1, 2, 3, 4, 5]
+                let s = nums.reduce(fn(a: Int, b: Int) -> Int { a + b })
+                print(s)
+            }
+            """)).isEqualTo("15");
+    }
+
+    @Test void bc_list_any_all() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                let nums = [2, 4, 6]
+                print(nums.any(fn(x: Int) -> Bool { x > 5 }))
+                print(nums.all(fn(x: Int) -> Bool { x > 0 }))
+            }
+            """)).isEqualTo("true\ntrue");
+    }
+
+    @Test void bc_list_sort() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                let nums = [5, 2, 8, 1]
+                print(nums.sort())
+            }
+            """)).isEqualTo("[1, 2, 5, 8]");
+    }
+
+    @Test void bc_list_zip_enumerate() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                let a = [10, 20]
+                let b = [1, 2]
+                let z = a.zip(b)
+                for (x, y) in z { print(x + y) }
+                let e = b.enumerate()
+                for (i, v) in e { print(i) }
+            }
+            """)).isEqualTo("11\n22\n0\n1");
+    }
 }

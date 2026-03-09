@@ -499,7 +499,8 @@ public final class Interpreter {
     /** Names that are handled as built-in functions (evaluated without a user FnDecl). */
     private static final Set<String> BUILTIN_NAMES = Set.of(
             "print", "input", "str", "int", "float", "len",
-            "assert", "is_some", "is_none", "is_ok", "is_err", "unwrap", "unwrap_or");
+            "assert", "is_some", "is_none", "is_ok", "is_err", "unwrap", "unwrap_or",
+            "abs", "min", "max", "pow", "sqrt", "floor", "ceil");
 
     private AionValue evalFnCall(Expr.FnCall e, Environment env) {
         // Evaluate args exactly ONCE to avoid double-executing side-effectful
@@ -752,6 +753,25 @@ public final class Interpreter {
         return new AionValue.BoolVal(pred.test(c));
     }
 
+    private int compareValues(AionValue a, AionValue b) {
+        return switch (a) {
+            case AionValue.IntVal   x when b instanceof AionValue.IntVal   y -> Long.compare(x.value(), y.value());
+            case AionValue.FloatVal x when b instanceof AionValue.FloatVal y -> Double.compare(x.value(), y.value());
+            case AionValue.IntVal   x when b instanceof AionValue.FloatVal y -> Double.compare(x.value(), y.value());
+            case AionValue.FloatVal x when b instanceof AionValue.IntVal   y -> Double.compare(x.value(), y.value());
+            case AionValue.StrVal   x when b instanceof AionValue.StrVal   y -> x.value().compareTo(y.value());
+            default -> throw new AionRuntimeException("Cannot compare " + a + " with " + b);
+        };
+    }
+
+    private double toDouble(AionValue v) {
+        return switch (v) {
+            case AionValue.IntVal   i -> (double) i.value();
+            case AionValue.FloatVal f -> f.value();
+            default -> throw new AionRuntimeException("Expected numeric value, got: " + v);
+        };
+    }
+
     private boolean aionEquals(AionValue a, AionValue b) {
         return switch (a) {
             case AionValue.IntVal   x -> b instanceof AionValue.IntVal   y && x.value() == y.value();
@@ -849,13 +869,15 @@ public final class Interpreter {
                                     .reduce((a,b)->a+" "+b).orElse("")); yield new AionValue.UnitVal(); }
             case "str"     -> new AionValue.StrVal(vals.get(0).toString());
             case "int"     -> switch (vals.get(0)) {
-                                case AionValue.StrVal s   -> new AionValue.IntVal(Long.parseLong(s.value()));
+                                case AionValue.StrVal   s -> new AionValue.IntVal(Long.parseLong(s.value()));
                                 case AionValue.FloatVal f -> new AionValue.IntVal((long) f.value());
+                                case AionValue.IntVal   i -> i;
                                 default -> vals.get(0);
                              };
             case "float"   -> switch (vals.get(0)) {
-                                case AionValue.StrVal s   -> new AionValue.FloatVal(Double.parseDouble(s.value()));
-                                case AionValue.IntVal i   -> new AionValue.FloatVal(i.value());
+                                case AionValue.StrVal   s -> new AionValue.FloatVal(Double.parseDouble(s.value()));
+                                case AionValue.IntVal   i -> new AionValue.FloatVal(i.value());
+                                case AionValue.FloatVal f -> f;
                                 default -> vals.get(0);
                              };
             case "len"     -> switch (vals.get(0)) {
@@ -884,6 +906,23 @@ public final class Interpreter {
                                 case AionValue.OkVal  ov -> ov.inner();
                                 default -> vals.get(1);
                              };
+            case "abs"   -> switch (vals.get(0)) {
+                                case AionValue.IntVal   i -> new AionValue.IntVal(Math.abs(i.value()));
+                                case AionValue.FloatVal f -> new AionValue.FloatVal(Math.abs(f.value()));
+                                default -> throw new AionRuntimeException("abs() requires Int or Float");
+                             };
+            case "min"   -> {
+                AionValue a = vals.get(0), b = vals.get(1);
+                yield compareValues(a, b) <= 0 ? a : b;
+            }
+            case "max"   -> {
+                AionValue a = vals.get(0), b = vals.get(1);
+                yield compareValues(a, b) >= 0 ? a : b;
+            }
+            case "pow"   -> new AionValue.FloatVal(Math.pow(toDouble(vals.get(0)), toDouble(vals.get(1))));
+            case "sqrt"  -> new AionValue.FloatVal(Math.sqrt(toDouble(vals.get(0))));
+            case "floor" -> new AionValue.IntVal((long) Math.floor(toDouble(vals.get(0))));
+            case "ceil"  -> new AionValue.IntVal((long) Math.ceil(toDouble(vals.get(0))));
             default -> throw new AionRuntimeException("Unknown builtin: " + name);
         };
     }
@@ -913,6 +952,70 @@ public final class Interpreter {
                     List<AionValue> result = new ArrayList<>();
                     for (AionValue v : l.elements()) if (isTruthy(callFn(fn, List.of(v)))) result.add(v);
                     yield new AionValue.ListVal(result);
+                }
+                case "reduce"  -> {
+                    if (l.elements().isEmpty()) yield new AionValue.NoneVal();
+                    AionValue.FnVal fn = (AionValue.FnVal) args.get(0);
+                    AionValue acc = l.elements().get(0);
+                    for (int i = 1; i < l.elements().size(); i++) acc = callFn(fn, List.of(acc, l.elements().get(i)));
+                    yield acc;
+                }
+                case "find"    -> {
+                    AionValue.FnVal fn = (AionValue.FnVal) args.get(0);
+                    for (AionValue v : l.elements()) if (isTruthy(callFn(fn, List.of(v)))) yield new AionValue.SomeVal(v);
+                    yield new AionValue.NoneVal();
+                }
+                case "any"     -> {
+                    AionValue.FnVal fn = (AionValue.FnVal) args.get(0);
+                    for (AionValue v : l.elements()) if (isTruthy(callFn(fn, List.of(v)))) yield new AionValue.BoolVal(true);
+                    yield new AionValue.BoolVal(false);
+                }
+                case "all"     -> {
+                    AionValue.FnVal fn = (AionValue.FnVal) args.get(0);
+                    for (AionValue v : l.elements()) if (!isTruthy(callFn(fn, List.of(v)))) yield new AionValue.BoolVal(false);
+                    yield new AionValue.BoolVal(true);
+                }
+                case "flat_map" -> {
+                    AionValue.FnVal fn = (AionValue.FnVal) args.get(0);
+                    List<AionValue> result = new ArrayList<>();
+                    for (AionValue v : l.elements()) {
+                        AionValue mapped = callFn(fn, List.of(v));
+                        if (mapped instanceof AionValue.ListVal inner) result.addAll(inner.elements());
+                        else result.add(mapped);
+                    }
+                    yield new AionValue.ListVal(result);
+                }
+                case "zip"     -> {
+                    AionValue.ListVal other = (AionValue.ListVal) args.get(0);
+                    List<AionValue> result = new ArrayList<>();
+                    int sz = Math.min(l.elements().size(), other.elements().size());
+                    for (int i = 0; i < sz; i++)
+                        result.add(new AionValue.TupleVal(List.of(l.elements().get(i), other.elements().get(i))));
+                    yield new AionValue.ListVal(result);
+                }
+                case "enumerate" -> {
+                    List<AionValue> result = new ArrayList<>();
+                    for (int i = 0; i < l.elements().size(); i++)
+                        result.add(new AionValue.TupleVal(List.of(new AionValue.IntVal(i), l.elements().get(i))));
+                    yield new AionValue.ListVal(result);
+                }
+                case "sort"    -> {
+                    List<AionValue> sorted = new ArrayList<>(l.elements());
+                    sorted.sort((a, b) -> compareValues(a, b));
+                    yield new AionValue.ListVal(sorted);
+                }
+                case "sort_by" -> {
+                    AionValue.FnVal fn = (AionValue.FnVal) args.get(0);
+                    List<AionValue> sorted = new ArrayList<>(l.elements());
+                    sorted.sort((a, b) -> compareValues(callFn(fn, List.of(a)), callFn(fn, List.of(b))));
+                    yield new AionValue.ListVal(sorted);
+                }
+                case "first"   -> l.elements().isEmpty() ? new AionValue.NoneVal() : new AionValue.SomeVal(l.elements().get(0));
+                case "last"    -> l.elements().isEmpty() ? new AionValue.NoneVal() : new AionValue.SomeVal(l.elements().get(l.elements().size()-1));
+                case "reverse" -> {
+                    List<AionValue> rev = new ArrayList<>(l.elements());
+                    Collections.reverse(rev);
+                    yield new AionValue.ListVal(rev);
                 }
                 default -> throw new AionRuntimeException("List has no method '" + method + "'");
             };

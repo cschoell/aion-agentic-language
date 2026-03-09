@@ -325,7 +325,7 @@ Allows porting code from semicolon-terminated languages without reformatting.
 | 2 | Closures / lambdas | 🔴 | Medium | ✅ done |
 | 3 | Traits / interfaces | 🔴 | Large | ✅ done |
 | 4 | `?` error propagation | 🟠 | Small | ✅ done |
-| 5 | Generic functions (real) | 🟠 | Large | — |
+| 5 | Generic functions (real) | 🟠 | Large | ✅ done |
 | 6 | Deep mutable field assignment | 🟠 | Medium | ✅ done |
 | 15 | Semantic / newtype aliases | 🟠 | Small-Medium | ✅ done |
 | 16 | Refinement types (`where` constraints) | 🟠 | Large | ✅ done |
@@ -333,7 +333,7 @@ Allows porting code from semicolon-terminated languages without reformatting.
 | 7 | String interpolation | 🟡 | Small | ✅ done |
 | 8 | `break` / `continue` | 🟡 | Small | ✅ done |
 | 9 | Tuple types | 🟡 | Medium | ✅ done |
-| 10 | `@async` / concurrency | 🟡 | Large | — |
+| 10 | `@async` / concurrency | 🟡 | Large | ✅ done |
 | 11 | Pattern guards | 🟡 | Small | ✅ done |
 | 18 | Named return variables | 🟢 | Small-Medium | ✅ done |
 | 12 | `const` declarations | 🟢 | Small | ✅ done |
@@ -361,5 +361,5 @@ Sorted by effort within each priority tier, prerequisites noted:
 14. ~~**Selective imports**~~ ✅ **done** *(small — `import foo { bar, baz }` syntax)*
 15. ~~**Traits**~~ ✅ **done** *(trait/impl system; interpreter + bytecode; 10 tests)*
 16. ~~**Refinement type bytecode injection**~~ ✅ **done** *(emit `CheckConstraint` in the compiler; 5 new bytecode tests)*
-17. **Generic functions** *(large — builds on traits)*
-18. **`@async` / concurrency** *(large — needs scheduler, best done last)*
+17. ~~**Generic functions**~~ ✅ **done** *(type-erased generics with optional trait bounds; 4 interpreter + 4 bytecode tests)*
+18. ~~**`@async` / concurrency**~~ ✅ **done** *(async fn + await; virtual-thread Future[T]; 4 interpreter + 3 bytecode tests)*

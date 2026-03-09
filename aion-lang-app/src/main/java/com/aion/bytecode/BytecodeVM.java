@@ -298,6 +298,25 @@ public class BytecodeVM {
             case Instruction.Continue ignored -> throw new RuntimeException("BUG: unpatched Continue");
             case Instruction.Stringify ignored -> stack.push(format(stack.pop()));
 
+            // ── Math builtins ─────────────────────────────────────────────────
+            case Instruction.MathBuiltin mb -> {
+                Object[] args = new Object[mb.arity()];
+                for (int i = mb.arity() - 1; i >= 0; i--) args[i] = stack.pop();
+                stack.push(switch (mb.op()) {
+                    case "abs"   -> {
+                        if (args[0] instanceof Long l) yield Math.abs(l);
+                        yield Math.abs(((Number) args[0]).doubleValue());
+                    }
+                    case "min"   -> compare(args[0], args[1]) <= 0 ? args[0] : args[1];
+                    case "max"   -> compare(args[0], args[1]) >= 0 ? args[0] : args[1];
+                    case "pow"   -> Math.pow(((Number) args[0]).doubleValue(), ((Number) args[1]).doubleValue());
+                    case "sqrt"  -> Math.sqrt(((Number) args[0]).doubleValue());
+                    case "floor" -> (long) Math.floor(((Number) args[0]).doubleValue());
+                    case "ceil"  -> (long) Math.ceil(((Number) args[0]).doubleValue());
+                    default -> throw new RuntimeException("Unknown math builtin: " + mb.op());
+                });
+            }
+
             // ── Range ─────────────────────────────────────────────────────────
             case Instruction.MakeRange mr -> {
                 long to   = (Long) stack.pop();
@@ -538,6 +557,70 @@ public class BytecodeVM {
                         if (Boolean.TRUE.equals(callLambdaValue(fn, elem))) result.add(elem);
                     yield new ListVal(result);
                 }
+                case "reduce" -> {
+                    if (lv.elements().isEmpty()) yield null;
+                    LambdaVal fn = (LambdaVal) args[0];
+                    Object acc = lv.elements().get(0);
+                    for (int i = 1; i < lv.elements().size(); i++) acc = callLambdaValue2(fn, acc, lv.elements().get(i));
+                    yield acc;
+                }
+                case "find" -> {
+                    LambdaVal fn = (LambdaVal) args[0];
+                    for (Object elem : lv.elements()) if (Boolean.TRUE.equals(callLambdaValue(fn, elem))) yield new SomeVal(elem);
+                    yield null;
+                }
+                case "any" -> {
+                    LambdaVal fn = (LambdaVal) args[0];
+                    for (Object elem : lv.elements()) if (Boolean.TRUE.equals(callLambdaValue(fn, elem))) yield true;
+                    yield false;
+                }
+                case "all" -> {
+                    LambdaVal fn = (LambdaVal) args[0];
+                    for (Object elem : lv.elements()) if (!Boolean.TRUE.equals(callLambdaValue(fn, elem))) yield false;
+                    yield true;
+                }
+                case "flat_map" -> {
+                    LambdaVal fn = (LambdaVal) args[0];
+                    ArrayList<Object> result = new ArrayList<>();
+                    for (Object elem : lv.elements()) {
+                        Object mapped = callLambdaValue(fn, elem);
+                        if (mapped instanceof ListVal inner) result.addAll(inner.elements());
+                        else result.add(mapped);
+                    }
+                    yield new ListVal(result);
+                }
+                case "zip" -> {
+                    ListVal other = (ListVal) args[0];
+                    ArrayList<Object> result = new ArrayList<>();
+                    int sz = Math.min(lv.elements().size(), other.elements().size());
+                    for (int i = 0; i < sz; i++)
+                        result.add(new TupleVal(new ArrayList<>(List.of(lv.elements().get(i), other.elements().get(i)))));
+                    yield new ListVal(result);
+                }
+                case "enumerate" -> {
+                    ArrayList<Object> result = new ArrayList<>();
+                    for (int i = 0; i < lv.elements().size(); i++)
+                        result.add(new TupleVal(new ArrayList<>(List.of((long) i, lv.elements().get(i)))));
+                    yield new ListVal(result);
+                }
+                case "sort" -> {
+                    ArrayList<Object> sorted = new ArrayList<>(lv.elements());
+                    sorted.sort(this::compare);
+                    yield new ListVal(sorted);
+                }
+                case "sort_by" -> {
+                    LambdaVal fn = (LambdaVal) args[0];
+                    ArrayList<Object> sorted = new ArrayList<>(lv.elements());
+                    sorted.sort((a, b) -> compare(callLambdaValue(fn, a), callLambdaValue(fn, b)));
+                    yield new ListVal(sorted);
+                }
+                case "first" -> lv.elements().isEmpty() ? null : new SomeVal(lv.elements().get(0));
+                case "last"  -> lv.elements().isEmpty() ? null : new SomeVal(lv.elements().get(lv.elements().size()-1));
+                case "reverse" -> {
+                    ArrayList<Object> rev = new ArrayList<>(lv.elements());
+                    java.util.Collections.reverse(rev);
+                    yield new ListVal(rev);
+                }
                 default -> throw new RuntimeException("List has no method '" + method + "'");
             };
             case MapVal mv -> switch (method) {
@@ -636,6 +719,27 @@ public class BytecodeVM {
      * on the same instruction list ({@link #currentBytecode}).
      * Used by {@code list.map(fn)} and {@code list.filter(fn)}.
      */
+    private Object callLambdaValue2(LambdaVal fn, Object arg1, Object arg2) {
+        frames.push(new Frame(-1, locals));
+        locals = new HashMap<>();
+        if (fn.params().size() >= 1) locals.put(fn.params().get(0), arg1);
+        if (fn.params().size() >= 2) locals.put(fn.params().get(1), arg2);
+        int ip = fn.address();
+        while (ip >= 0 && ip < currentBytecode.size()) {
+            Instruction instr = currentBytecode.get(ip);
+            if (instr instanceof Instruction.Return r) {
+                Object retVal = r.hasValue() ? stack.pop() : null;
+                Frame frame = frames.pop();
+                locals = frame.locals();
+                return retVal;
+            }
+            ip = execute(instr, ip, currentBytecode.size());
+        }
+        Frame frame = frames.pop();
+        locals = frame.locals();
+        return null;
+    }
+
     private Object callLambdaValue(LambdaVal fn, Object arg) {
         // Save current locals, push a return frame, then execute from the lambda address
         frames.push(new Frame(-1, locals));

@@ -245,6 +245,35 @@ fn abs_clamp(n: Int) -> (clamped: Int) {
     print("first(7, x)     = ${first(7, xstr)}")
     print("show(123)       = ${show(123)}")
 
+    // -- math builtins: abs, min, max, pow, sqrt, floor, ceil --
+    print("abs(-9)      = ${abs(-9)}")
+    print("min(3, 7)    = ${min(3, 7)}")
+    print("max(3, 7)    = ${max(3, 7)}")
+    print("sqrt(16.0)   = ${sqrt(16.0)}")
+    print("floor(3.9)   = ${floor(3.9)}")
+    print("ceil(3.1)    = ${ceil(3.1)}")
+
+    // -- list methods: reduce, any, all, find, zip, enumerate, sort, reverse, flat_map --
+    let ml = [3, 1, 4, 1, 5, 9, 2, 6]
+    let ml_sum = ml.reduce(fn(a: Int, b: Int) -> Int { a + b })
+    print("reduce sum   = ${ml_sum}")
+    let has_big = ml.any(fn(x: Int) -> Bool { x > 8 })
+    print("any > 8      = ${has_big}")
+    let all_pos = ml.all(fn(x: Int) -> Bool { x > 0 })
+    print("all > 0      = ${all_pos}")
+    let found = ml.find(fn(x: Int) -> Bool { x > 4 })
+    print("find > 4     = ${found}")
+    let sorted_ml = ml.sort()
+    print("sorted       = ${sorted_ml}")
+    let rev_ml = sorted_ml.reverse()
+    print("reversed     = ${rev_ml}")
+    let ea = [10, 20, 30]
+    let eb = [1, 2, 3]
+    let zipped = ea.zip(eb)
+    print("zip          = ${zipped}")
+    let indexed = eb.enumerate()
+    print("enumerate    = ${indexed}")
+
     // -- async fn + await --
     let doubled = await async_double(21)
     print("await async_double(21) = ${doubled}")

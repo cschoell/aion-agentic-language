@@ -37,6 +37,7 @@ public sealed interface Instruction permits
         Instruction.CheckConstraint,
         Instruction.MakeAsync,
         Instruction.AwaitFuture,
+        Instruction.MathBuiltin,
         Instruction.Halt {
 
     // ── Literals ─────────────────────────────────────────────────────────────
@@ -206,6 +207,10 @@ public sealed interface Instruction permits
     record DestructureRecord(java.util.List<String> names) implements Instruction {}
     /** Pop a TupleVal (or ListVal) from TOS; store each element positionally into the named variables. */
     record DestructureTuple(java.util.List<String> names) implements Instruction {}
+
+    // ── Math builtins ─────────────────────────────────────────────────────────
+    /** Execute a math builtin: abs(1), min(2), max(2), pow(2), sqrt(1), floor(1), ceil(1). */
+    record MathBuiltin(String op, int arity) implements Instruction {}
 
     // ── Refinement type constraint check ─────────────────────────────────────
     /**

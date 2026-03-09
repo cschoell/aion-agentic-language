@@ -5,6 +5,38 @@ Versioning follows **date-based** releases while the project is pre-1.0.
 
 ---
 
+## [0.11.0] — 2026-03-09 · Math builtins + extended list methods
+
+### Language
+- **Math builtins** — `abs`, `min`, `max`, `pow`, `sqrt`, `floor`, `ceil` available as
+  top-level functions in both interpreter and bytecode VM.
+- **Extended list methods** — `reduce`, `any`, `all`, `find`, `zip`, `enumerate`, `sort`,
+  `sort_by`, `reverse`, `flat_map`, `first`, `last` added to `List[T]` in both backends.
+- **Lambda implicit return (bytecode)** — lambda bodies now support trailing-expression
+  implicit return in the bytecode compiler (mirrors the fix already in named functions).
+
+### Bytecode
+- `Instruction.MathBuiltin(op, arity)` — new sealed instruction; emitted by `BytecodeCompiler`
+  for math builtin calls; executed by `BytecodeVM`.
+- `BytecodeVM` — `callLambdaValue2` helper for two-argument lambda calls (used by `reduce`,
+  `sort_by`); all new list method cases added to `CallMethod` dispatch.
+
+### Interpreter
+- `compareValues` and `toDouble` private helpers extracted for use by math builtins and
+  `sort` / `sort_by` list methods.
+- `BUILTIN_NAMES` set extended with `abs`, `min`, `max`, `pow`, `sqrt`, `floor`, `ceil`.
+
+### Tests
+- 11 new interpreter tests in `SmallFeaturesTest` (4 math + 7 list methods).
+- 8 new bytecode tests in `BytecodeCompilerTest` (4 math + 4 list methods).
+- Total: **231 passing tests** across 7 suites.
+
+### Demo
+- `bytecode-demo.aion` — new math builtins section and list methods section.
+- `ResourceScriptE2ETest` expected output updated with 15 new lines.
+
+---
+
 ## [0.10.0] — 2026-03-09 · Generic functions + async/await
 
 ### Language

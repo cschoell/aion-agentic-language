@@ -786,6 +786,118 @@ class SmallFeaturesTest {
         assertThat(out).containsExactly("37");
     }
 
+    // ── Math builtins ─────────────────────────────────────────────────────────
+
+    @Test void math_abs_int() {
+        var out = run("""
+            @pure fn main() -> Unit { print(abs(-7)) }
+            """);
+        assertThat(out).containsExactly("7");
+    }
+
+    @Test void math_min_max() {
+        var out = run("""
+            @pure fn main() -> Unit {
+                print(min(3, 7))
+                print(max(3, 7))
+            }
+            """);
+        assertThat(out).containsExactly("3", "7");
+    }
+
+    @Test void math_pow_sqrt() {
+        var out = run("""
+            @pure fn main() -> Unit {
+                print(pow(2, 10))
+                print(sqrt(4.0))
+            }
+            """);
+        assertThat(out).containsExactly("1024.0", "2.0");
+    }
+
+    @Test void math_floor_ceil() {
+        var out = run("""
+            @pure fn main() -> Unit {
+                print(floor(3.7))
+                print(ceil(3.2))
+            }
+            """);
+        assertThat(out).containsExactly("3", "4");
+    }
+
+    // ── List methods ──────────────────────────────────────────────────────────
+
+    @Test void list_reduce() {
+        var out = run("""
+            @pure fn main() -> Unit {
+                let nums = [1, 2, 3, 4, 5]
+                let sum = nums.reduce(fn(a: Int, b: Int) -> Int { a + b })
+                print(sum)
+            }
+            """);
+        assertThat(out).containsExactly("15");
+    }
+
+    @Test void list_any_all() {
+        var out = run("""
+            @pure fn main() -> Unit {
+                let nums = [2, 4, 6]
+                print(nums.any(fn(x: Int) -> Bool { x > 5 }))
+                print(nums.all(fn(x: Int) -> Bool { x > 0 }))
+            }
+            """);
+        assertThat(out).containsExactly("true", "true");
+    }
+
+    @Test void list_find() {
+        var out = run("""
+            @pure fn main() -> Unit {
+                let nums = [1, 2, 3, 4]
+                let r = nums.find(fn(x: Int) -> Bool { x > 2 })
+                print(r)
+            }
+            """);
+        assertThat(out).containsExactly("some(3)");
+    }
+
+    @Test void list_zip_enumerate() {
+        var out = run("""
+            @pure fn main() -> Unit {
+                let a = [10, 20, 30]
+                let b = [1, 2, 3]
+                let zipped = a.zip(b)
+                for (x, y) in zipped { print(x + y) }
+                let indexed = b.enumerate()
+                for (i, v) in indexed { print(i) }
+            }
+            """);
+        assertThat(out).containsExactly("11", "22", "33", "0", "1", "2");
+    }
+
+    @Test void list_sort_reverse() {
+        var out = run("""
+            @pure fn main() -> Unit {
+                let nums = [3, 1, 4, 1, 5]
+                let s = nums.sort()
+                print(s)
+                let r = s.reverse()
+                print(r)
+            }
+            """);
+        assertThat(out).containsExactly("[1, 1, 3, 4, 5]", "[5, 4, 3, 1, 1]");
+    }
+
+    @Test void list_flat_map() {
+        var out = run("""
+            @pure fn main() -> Unit {
+                let nums = [1, 2, 3]
+                let doubled = nums.flat_map(fn(x: Int) -> List[Int] { [x, x * 2] })
+                print(doubled)
+            }
+            """);
+        assertThat(out).containsExactly("[1, 2, 2, 4, 3, 6]");
+    }
+
     // ── Deep field assignment (feature #6) ────────────────────────────────────
 
     @Test void deep_field_assignment_interpreter() {

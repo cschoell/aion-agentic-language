@@ -759,6 +759,15 @@ public class BytecodeCompiler {
             case "ok"    -> { compileExpr(argVal(call.args().getFirst())); emit(new Instruction.PushOk());  }
             case "err"   -> { compileExpr(argVal(call.args().getFirst())); emit(new Instruction.PushErr()); }
             case "none"  -> emit(new Instruction.PushNone());
+            case "abs", "sqrt", "floor", "ceil" -> {
+                compileExpr(argVal(call.args().getFirst()));
+                emit(new Instruction.MathBuiltin(call.name(), 1));
+            }
+            case "min", "max", "pow" -> {
+                compileExpr(argVal(call.args().get(0)));
+                compileExpr(argVal(call.args().get(1)));
+                emit(new Instruction.MathBuiltin(call.name(), 2));
+            }
             default -> {
                 FnDecl fn = fnDecls.get(call.name());
                 if (fn == null) {
@@ -832,10 +841,20 @@ public class BytecodeCompiler {
         fnAddrs.put(name, lambdaAddr);
         patchForwardCalls(name);
         int bodyStart = out.size();
-        compileBlock(synth.body());
-        int epilogueIdx = out.size();
-        emit(new Instruction.Return(false));
-        patchPropagates(bodyStart, epilogueIdx);
+        List<Stmt> stmts = synth.body().stmts();
+        boolean implicitReturn = !stmts.isEmpty() && stmts.getLast() instanceof Stmt.ExprStmt;
+        if (implicitReturn) {
+            for (int i = 0; i < stmts.size() - 1; i++) compileStmt(stmts.get(i));
+            compileExpr(((Stmt.ExprStmt) stmts.getLast()).expr());
+            int epilogueIdx = out.size();
+            emit(new Instruction.Return(true));
+            patchPropagates(bodyStart, epilogueIdx);
+        } else {
+            compileBlock(synth.body());
+            int epilogueIdx = out.size();
+            emit(new Instruction.Return(false));
+            patchPropagates(bodyStart, epilogueIdx);
+        }
         patch(skipJump, new Instruction.Jump(out.size()));
 
         // Push a lambda value (entry address + param names) onto the stack
