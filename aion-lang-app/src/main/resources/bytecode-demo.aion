@@ -8,6 +8,8 @@
 //   break          — exit while loop early
 //   continue       — skip specific iterations
 //   user functions — factorial (recursive)
+//   lambda         — fn(x) -> T passed to map / filter
+//   @on_fail       — structured tool error hint (parsed, shown in descriptor)
 
 const GREETING: Str = "Aion bytecode"
 const LIMIT: Int = 4
@@ -17,11 +19,30 @@ const LIMIT: Int = 4
     return n * factorial(n - 1)
 }
 
+// ── Higher-order helpers ──────────────────────────────────────────────────────
+@pure fn square_all(xs: List[Int]) -> List[Int] {
+    return xs.map(fn(x: Int) -> Int { return x * x })
+}
+
+@pure fn only_even(xs: List[Int]) -> List[Int] {
+    return xs.filter(fn(x: Int) -> Bool { return x % 2 == 0 })
+}
+
+// ── @on_fail tool (bytecode path) ─────────────────────────────────────────────
+@tool
+@pure
+@requires(b != 0)
+@on_fail("b must not be zero. Please retry with a non-zero divisor.")
+fn safe_div(a: Int, b: Int) -> Int {
+    describe "Divides a by b. Safe for agent use."
+    return a / b
+}
+
 @pure fn main() -> Unit {
-    // const + string interpolation
+    // ── const + string interpolation ──────────────────────────────────────────
     print("Hello from ${GREETING}!")
 
-    // break: stop once i reaches LIMIT
+    // ── break: stop once i reaches LIMIT ──────────────────────────────────────
     mut i = 0
     while i < 100 {
         i = i + 1
@@ -29,7 +50,7 @@ const LIMIT: Int = 4
     }
     print("Broke out at i = ${i}")
 
-    // continue: print only odd numbers 1..7
+    // ── continue: print only odd numbers 1..7 ─────────────────────────────────
     mut j = 0
     while j < 7 {
         j = j + 1
@@ -39,11 +60,29 @@ const LIMIT: Int = 4
         print("odd: ${j}")
     }
 
-    // recursive user function
+    // ── recursive user function ───────────────────────────────────────────────
     print("5! = ${factorial(5)}")
 
-    // arithmetic in interpolation
+    // ── arithmetic in interpolation ───────────────────────────────────────────
     let a = 6
     let b = 7
     print("${a} * ${b} = ${a * b}")
+
+    // ── lambda: map ───────────────────────────────────────────────────────────
+    let nums = [1, 2, 3, 4, 5]
+    let squares = square_all(nums)
+    print("Squares: ${squares}")
+
+    // ── lambda: filter ────────────────────────────────────────────────────────
+    let evens = only_even(nums)
+    print("Evens:   ${evens}")
+
+    // ── inline lambda stored in a variable ────────────────────────────────────
+    let triple = fn(x: Int) -> Int { return x * 3 }
+    let tripled = nums.map(triple)
+    print("Tripled: ${tripled}")
+
+    // ── @on_fail tool: valid call succeeds ────────────────────────────────────
+    let d = safe_div(20, 4)
+    print("safe_div(20, 4) = ${d}")
 }

@@ -206,5 +206,112 @@ class AionLanguageTest {
         assertThat(((com.aion.interpreter.AionValue.FloatVal)
                 ((com.aion.interpreter.AionValue.OkVal) v).inner()).value()).isEqualTo(5.0);
     }
+
+    // ── @on_fail structured tool errors ──────────────────────────────────────
+
+    @Test void on_fail_wraps_precondition_breach_as_err() {
+        Interpreter i = run("""
+            @tool
+            @pure
+            @requires(b != 0)
+            @on_fail("b must be non-zero")
+            fn safe_div(a: Int, b: Int) -> Int {
+                return a / b
+            }
+            """);
+        var result = i.callFunction("safe_div",
+                List.of(new com.aion.interpreter.AionValue.IntVal(10),
+                        new com.aion.interpreter.AionValue.IntVal(0)));
+        assertThat(result).isInstanceOf(com.aion.interpreter.AionValue.ErrVal.class);
+        var inner = (com.aion.interpreter.AionValue.RecordVal)
+                ((com.aion.interpreter.AionValue.ErrVal) result).inner();
+        assertThat(inner.typeName()).isEqualTo("ToolError");
+        assertThat(((com.aion.interpreter.AionValue.StrVal) inner.fields().get("hint")).value())
+                .isEqualTo("b must be non-zero");
+    }
+
+    @Test void on_fail_not_triggered_on_success() {
+        Interpreter i = run("""
+            @tool
+            @pure
+            @requires(b != 0)
+            @on_fail("b must be non-zero")
+            fn safe_div(a: Int, b: Int) -> Int {
+                return a / b
+            }
+            """);
+        var result = i.callFunction("safe_div",
+                List.of(new com.aion.interpreter.AionValue.IntVal(10),
+                        new com.aion.interpreter.AionValue.IntVal(2)));
+        assertThat(result).isInstanceOf(com.aion.interpreter.AionValue.IntVal.class);
+        assertThat(((com.aion.interpreter.AionValue.IntVal) result).value()).isEqualTo(5);
+    }
+
+    // ── Lambda expressions ────────────────────────────────────────────────────
+
+    @Test void lambda_stored_and_called() {
+        Interpreter i = run("""
+            @pure fn apply(xs: List[Int]) -> List[Int] {
+                let double = fn(x: Int) -> Int { return x * 2 }
+                return xs.map(double)
+            }
+            """);
+        var input = new com.aion.interpreter.AionValue.ListVal(
+                new java.util.ArrayList<>(List.of(
+                        new com.aion.interpreter.AionValue.IntVal(1),
+                        new com.aion.interpreter.AionValue.IntVal(2),
+                        new com.aion.interpreter.AionValue.IntVal(3))));
+        var result = (com.aion.interpreter.AionValue.ListVal) i.callFunction("apply", List.of(input));
+        assertThat(result.elements()).containsExactly(
+                new com.aion.interpreter.AionValue.IntVal(2),
+                new com.aion.interpreter.AionValue.IntVal(4),
+                new com.aion.interpreter.AionValue.IntVal(6));
+    }
+
+    @Test void lambda_used_with_filter() {
+        Interpreter i = run("""
+            @pure fn evens(xs: List[Int]) -> List[Int] {
+                return xs.filter(fn(x: Int) -> Bool { return x % 2 == 0 })
+            }
+            """);
+        var input = new com.aion.interpreter.AionValue.ListVal(
+                new java.util.ArrayList<>(List.of(
+                        new com.aion.interpreter.AionValue.IntVal(1),
+                        new com.aion.interpreter.AionValue.IntVal(2),
+                        new com.aion.interpreter.AionValue.IntVal(3),
+                        new com.aion.interpreter.AionValue.IntVal(4))));
+        var result = (com.aion.interpreter.AionValue.ListVal) i.callFunction("evens", List.of(input));
+        assertThat(result.elements()).containsExactly(
+                new com.aion.interpreter.AionValue.IntVal(2),
+                new com.aion.interpreter.AionValue.IntVal(4));
+    }
+
+    // ── Refinement types ──────────────────────────────────────────────────────
+
+    @Test void refinement_type_passes_valid_value() {
+        Interpreter i = run("""
+            type Score = Int where { self >= 0 and self <= 100 }
+            @pure fn make(n: Int) -> Int {
+                let s: Score = n
+                return n
+            }
+            """);
+        var result = i.callFunction("make", List.of(new com.aion.interpreter.AionValue.IntVal(42)));
+        assertThat(((com.aion.interpreter.AionValue.IntVal) result).value()).isEqualTo(42);
+    }
+
+    @Test void refinement_type_rejects_invalid_value() {
+        Interpreter i = run("""
+            type Score = Int where { self >= 0 and self <= 100 }
+            @pure fn make(n: Int) -> Int {
+                let s: Score = n
+                return n
+            }
+            """);
+        assertThatThrownBy(() -> i.callFunction("make",
+                List.of(new com.aion.interpreter.AionValue.IntVal(150))))
+                .isInstanceOf(com.aion.interpreter.AionRuntimeException.class)
+                .hasMessageContaining("Score");
+    }
 }
 

@@ -19,9 +19,11 @@ public class BytecodeVM {
     private final Deque<Frame>   frames  = new ArrayDeque<>();
     private Map<String, Object>  locals  = new HashMap<>();
     private final Scanner        scanner = new Scanner(System.in);
+    private List<Instruction>    currentBytecode = List.of();
 
     public void run(Bytecode bytecode) {
         frames.clear(); stack.clear(); locals = new HashMap<>();
+        currentBytecode = bytecode.instructions;
         List<Instruction> instrs = bytecode.instructions;
         int ip = 0;
         while (ip < instrs.size()) ip = execute(instrs.get(ip), ip, instrs.size());
@@ -64,6 +66,12 @@ public class BytecodeVM {
                 for (int i = 0; i < p.fields().size(); i++) fields.put(p.fields().get(i), vals[i]);
                 stack.push(new RecordVal(p.typeName(), fields));
             }
+            case Instruction.PushTuple p -> {
+                Object[] elems = new Object[p.size()];
+                for (int i = p.size() - 1; i >= 0; i--) elems[i] = stack.pop();
+                stack.push(new TupleVal(java.util.Arrays.asList(elems)));
+            }
+            case Instruction.PushLambda p -> stack.push(new LambdaVal(p.address(), p.params()));
 
             // ── Arithmetic ───────────────────────────────────────────────────
             case Instruction.Add ignored -> { Object b = stack.pop(), a = stack.pop(); stack.push(numericOp(a, b, '+')); }
@@ -114,6 +122,14 @@ public class BytecodeVM {
 
             // ── Field / index access ──────────────────────────────────────────
             case Instruction.GetField gf -> stack.push(getField(stack.pop(), gf.field()));
+            case Instruction.SetField sf -> {
+                Object val = stack.pop(), recv = stack.peek(); // peek — don't pop the receiver
+                if (recv instanceof RecordVal rv) {
+                    rv.fields().put(sf.field(), val);
+                } else {
+                    throw new RuntimeException("SetField: expected RecordVal, got " + recv);
+                }
+            }
             case Instruction.GetIndex  ignored -> {
                 Object idx = stack.pop(), recv = stack.pop();
                 stack.push(getIndex(recv, idx));
@@ -156,6 +172,12 @@ public class BytecodeVM {
             case Instruction.MatchNone   m -> {
                 if (!(stack.peek() == null || stack.peek() instanceof NoneVal)) { stack.pop(); return m.failJump(); }
             }
+            case Instruction.MatchTuple m -> {
+                Object top = stack.peek();
+                if (!(top instanceof TupleVal tv && tv.elements().size() == m.arity())) {
+                    stack.pop(); return m.failJump();
+                }
+            }
             case Instruction.MatchTag    m -> {
                 Object top = stack.peek();
                 boolean matches = switch (top) {
@@ -193,6 +215,18 @@ public class BytecodeVM {
                 for (int i = 0; i < c.params().size() && i < args.length; i++)
                     locals.put(c.params().get(i), args[i]);
                 return c.target();
+            }
+            case Instruction.CallLambda cl -> {
+                Object[] args = new Object[cl.arity()];
+                for (int i = cl.arity() - 1; i >= 0; i--) args[i] = stack.pop();
+                Object lambdaObj = stack.pop();
+                if (!(lambdaObj instanceof LambdaVal lv))
+                    throw new RuntimeException("CallLambda: not a lambda: " + lambdaObj);
+                frames.push(new Frame(ip + 1, locals));
+                locals = new HashMap<>();
+                for (int i = 0; i < lv.params().size() && i < args.length; i++)
+                    locals.put(lv.params().get(i), args[i]);
+                return lv.address();
             }
             case Instruction.Return r -> {
                 Object retVal = r.hasValue() ? stack.pop() : null;
@@ -281,6 +315,12 @@ public class BytecodeVM {
 
     private Object getIndex(Object recv, Object idx) {
         return switch (recv) {
+            case TupleVal tv -> {
+                int i = ((Long) idx).intValue();
+                if (i < 0 || i >= tv.elements().size())
+                    throw new RuntimeException("Tuple index out of bounds: " + i);
+                yield tv.elements().get(i);
+            }
             case ListVal lv -> {
                 int i = ((Long) idx).intValue();
                 // Return Some/null like interpreter for for-loop iteration
@@ -341,6 +381,19 @@ public class BytecodeVM {
                     int i = ((Long) args[0]).intValue();
                     yield lv.elements().remove(i);
                 }
+                case "map" -> {
+                    LambdaVal fn = (LambdaVal) args[0];
+                    ArrayList<Object> result = new ArrayList<>();
+                    for (Object elem : lv.elements()) result.add(callLambdaValue(fn, elem));
+                    yield new ListVal(result);
+                }
+                case "filter" -> {
+                    LambdaVal fn = (LambdaVal) args[0];
+                    ArrayList<Object> result = new ArrayList<>();
+                    for (Object elem : lv.elements())
+                        if (Boolean.TRUE.equals(callLambdaValue(fn, elem))) result.add(elem);
+                    yield new ListVal(result);
+                }
                 default -> throw new RuntimeException("List has no method '" + method + "'");
             };
             case MapVal mv -> switch (method) {
@@ -353,13 +406,24 @@ public class BytecodeVM {
                 case "values"   -> new ListVal(new ArrayList<>(mv.entries().values()));
                 default -> throw new RuntimeException("Map has no method '" + method + "'");
             };
+            case TupleVal tv -> switch (method) {
+                case "len"    -> (long) tv.elements().size();
+                case "get"    -> {
+                    int i = ((Long) args[0]).intValue();
+                    yield (i >= 0 && i < tv.elements().size())
+                            ? tv.elements().get(i)
+                            : null;
+                }
+                case "first"  -> tv.elements().get(0);
+                case "second" -> tv.elements().get(1);
+                default -> throw new RuntimeException("Tuple has no method '" + method + "'");
+            };
             default -> throw new RuntimeException(
                     "No method '" + method + "' on " + receiver.getClass().getSimpleName());
         };
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-
     private Object numericOp(Object a, Object b, char op) {
         boolean fp = (a instanceof Double) || (b instanceof Double);
         if (fp) {
@@ -417,7 +481,35 @@ public class BytecodeVM {
             case MapVal   mv  -> "{" + mv.entries().entrySet().stream()
                         .map(e -> format(e.getKey()) + ": " + format(e.getValue()))
                         .reduce((x,y)->x+", "+y).orElse("") + "}";
+            case TupleVal tv  -> "(" + tv.elements().stream().map(this::format).reduce((x,y)->x+", "+y).orElse("") + ")";
+            case LambdaVal lv -> "<fn@" + lv.address() + ">";
             default -> v.toString();
         };
+    }
+
+    /**
+     * Call a {@link LambdaVal} with a single argument, running the VM inline
+     * on the same instruction list ({@link #currentBytecode}).
+     * Used by {@code list.map(fn)} and {@code list.filter(fn)}.
+     */
+    private Object callLambdaValue(LambdaVal fn, Object arg) {
+        // Save current locals, push a return frame, then execute from the lambda address
+        frames.push(new Frame(-1, locals));
+        locals = new HashMap<>();
+        if (!fn.params().isEmpty()) locals.put(fn.params().getFirst(), arg);
+        int ip = fn.address();
+        while (ip >= 0 && ip < currentBytecode.size()) {
+            Instruction instr = currentBytecode.get(ip);
+            if (instr instanceof Instruction.Return r) {
+                Object retVal = r.hasValue() ? stack.pop() : null;
+                Frame frame = frames.pop();
+                locals = frame.locals();
+                return retVal;
+            }
+            ip = execute(instr, ip, currentBytecode.size());
+        }
+        Frame frame = frames.pop();
+        locals = frame.locals();
+        return null;
     }
 }

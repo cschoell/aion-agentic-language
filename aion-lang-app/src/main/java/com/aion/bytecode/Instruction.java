@@ -8,7 +8,8 @@ public sealed interface Instruction permits
         Instruction.PushBool, Instruction.PushNone,
         Instruction.PushSome, Instruction.PushOk, Instruction.PushErr,
         Instruction.PushList, Instruction.PushMap,
-        Instruction.PushEnum, Instruction.PushRecord,
+        Instruction.PushEnum, Instruction.PushRecord, Instruction.PushTuple,
+        Instruction.PushLambda,
         Instruction.Add, Instruction.Sub, Instruction.Mul, Instruction.Div, Instruction.Mod,
         Instruction.Neg,
         Instruction.Eq, Instruction.Ne, Instruction.Lt, Instruction.Le,
@@ -17,15 +18,17 @@ public sealed interface Instruction permits
         Instruction.AndShort, Instruction.OrShort,
         Instruction.Concat,
         Instruction.Store, Instruction.Load,
-        Instruction.GetField, Instruction.GetIndex, Instruction.SetIndex,
+        Instruction.GetField, Instruction.SetField, Instruction.GetIndex, Instruction.SetIndex,
         Instruction.Propagate,
         Instruction.Print, Instruction.ReadLine,
         Instruction.Jump, Instruction.JumpIfFalse, Instruction.JumpIfTrue,
         Instruction.JumpIfNone,
         Instruction.MatchTag, Instruction.MatchInt, Instruction.MatchFloat,
         Instruction.MatchStr, Instruction.MatchBool, Instruction.MatchNone,
+        Instruction.MatchTuple,
         Instruction.UnwrapInner,
-        Instruction.Call, Instruction.Return, Instruction.Pop, Instruction.Dup,
+        Instruction.Call, Instruction.CallLambda, Instruction.Return,
+        Instruction.Pop, Instruction.Dup,
         Instruction.CallMethod,
         Instruction.Break, Instruction.Continue, Instruction.Stringify,
         Instruction.Throw,
@@ -51,6 +54,12 @@ public sealed interface Instruction permits
     record PushEnum(String typeName, String variant, int arity) implements Instruction {}
     /** Pop {@code fields.size()} values (last field is TOS) and build a RecordVal. */
     record PushRecord(String typeName, java.util.List<String> fields) implements Instruction {}
+    /**
+     * Push a lambda value (entry-point address + parameter names) onto the stack.
+     * The resulting {@link com.aion.bytecode.VmValue.LambdaVal} can be passed as an
+     * argument, stored in a variable, or called via {@link CallLambda}.
+     */
+    record PushLambda(int address, java.util.List<String> params) implements Instruction {}
 
     // ── Arithmetic ───────────────────────────────────────────────────────────
     record Add()  implements Instruction {}
@@ -90,9 +99,22 @@ public sealed interface Instruction permits
     record Store(String name) implements Instruction {}
     record Load(String name)  implements Instruction {}
 
+    /** Pop {@code size} values (bottom pushed first) and build a TupleVal. */
+    record PushTuple(int size)     implements Instruction {}
+
+    // ...existing code...
+
     // ── Field / index access ─────────────────────────────────────────────────
     /** Pop receiver; push receiver.fieldName. */
     record GetField(String field) implements Instruction {}
+    /**
+     * Mutate a record field in-place.
+     * Stack before: receiver (RecordVal), new-value.
+     * The receiver must be the top-most value, so emit Load → Load-value → SetField.
+     * Actually stack order: TOS = new-value, TOS-1 = receiver.
+     * After: nothing pushed (statement).
+     */
+    record SetField(String field) implements Instruction {}
     /** Pop index, pop receiver; push receiver[index]. */
     record GetIndex()             implements Instruction {}
     /** Pop value, pop index, pop receiver; receiver[index] = value (push nothing). */
@@ -134,6 +156,11 @@ public sealed interface Instruction permits
     /** Peek TOS; if it is not null (None) jump to failJump. */
     record MatchNone(int failJump)               implements Instruction {}
     /**
+     * Peek TOS; if it is not a TupleVal with exactly {@code arity} elements, jump to failJump.
+     * On success, leaves the TupleVal on the stack for subsequent element binding.
+     */
+    record MatchTuple(int arity, int failJump)   implements Instruction {}
+    /**
      * Pop wrapper (Some/Ok/Err/EnumVal) and push its inner payload values
      * left-to-right (so last payload element ends up as TOS).
      */
@@ -141,6 +168,12 @@ public sealed interface Instruction permits
 
     // ── Calls ─────────────────────────────────────────────────────────────────
     record Call(int target, int arity, java.util.List<String> params) implements Instruction {}
+    /**
+     * Call a lambda value that is on TOS (below the arguments).
+     * Stack before: [lambda, arg0, arg1, …, argN-1]  (argN-1 = TOS).
+     * Stack after:  [returnValue].
+     */
+    record CallLambda(int arity) implements Instruction {}
     record Return(boolean hasValue) implements Instruction {}
     record Pop()    implements Instruction {}
     record Dup()    implements Instruction {}

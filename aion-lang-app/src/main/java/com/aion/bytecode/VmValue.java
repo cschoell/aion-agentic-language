@@ -13,7 +13,9 @@ public sealed interface VmValue permits
         VmValue.SomeVal, VmValue.NoneVal,
         VmValue.OkVal, VmValue.ErrVal,
         VmValue.EnumVal, VmValue.RecordVal,
-        VmValue.ListVal, VmValue.MapVal {
+        VmValue.ListVal, VmValue.MapVal,
+        VmValue.TupleVal,
+        VmValue.LambdaVal {
 
     /** Option::Some(inner) */
     record SomeVal(Object inner) implements VmValue {}
@@ -31,5 +33,13 @@ public sealed interface VmValue permits
     record ListVal(java.util.ArrayList<Object> elements) implements VmValue {}
     /** Map value (mutable). */
     record MapVal(java.util.LinkedHashMap<Object, Object> entries) implements VmValue {}
+    /** Tuple value: fixed-size, heterogeneous, immutable sequence. */
+    record TupleVal(java.util.List<Object> elements) implements VmValue {}
+    /**
+     * A first-class function / lambda value.
+     * {@code address} is the VM instruction index of the first instruction of the body.
+     * {@code params} lists parameter names in order for named-argument binding.
+     */
+    record LambdaVal(int address, java.util.List<String> params) implements VmValue {}
 }
 

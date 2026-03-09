@@ -20,7 +20,14 @@ public interface Node {
 
     sealed interface TypeDeclBody permits TypeDeclBody.Record, TypeDeclBody.Alias {
         record Record(List<FieldDecl> fields) implements TypeDeclBody {}
-        record Alias(TypeRef ref)             implements TypeDeclBody {}
+        /**
+         * Type alias, optionally with a refinement constraint.
+         * {@code type Email = Str where { self.starts_with("@") }}
+         * {@code constraint} is null for plain aliases.
+         * At runtime the constraint is evaluated with {@code self} bound to the value
+         * whenever a value is assigned to this type.
+         */
+        record Alias(TypeRef ref, Expr constraint) implements TypeDeclBody {}
     }
 
     record FieldDecl(String name, TypeRef type) {}
@@ -38,6 +45,8 @@ public interface Node {
                   List<String> typeParams,
                   List<Param> params,
                   TypeRef returnType,
+                  /** Non-null when signature uses {@code -> (name: Type)}; null otherwise. */
+                  String namedReturn,
                   Stmt.Block body,
                   Pos pos) implements Node {}
 
@@ -49,7 +58,8 @@ public interface Node {
             Annotation.Async, Annotation.Test, Annotation.Deprecated,
             Annotation.Throws,
             Annotation.Tool, Annotation.Requires, Annotation.Ensures,
-            Annotation.Timeout, Annotation.TrustedAnn, Annotation.UntrustedAnn {
+            Annotation.Timeout, Annotation.TrustedAnn, Annotation.UntrustedAnn,
+            Annotation.OnFail {
         record Pure()                implements Annotation {}
         record Io()                  implements Annotation {}
         record Mut()                 implements Annotation {}
@@ -69,6 +79,12 @@ public interface Node {
         record TrustedAnn()          implements Annotation {}
         /** All parameters are treated as untrusted (external) input. */
         record UntrustedAnn()        implements Annotation {}
+        /**
+         * Structured failure hint for agent-callable tools.
+         * When any failure (pre-condition, assert, timeout) occurs the runtime wraps
+         * it in {@code err(ToolError { hint, cause })} instead of throwing.
+         */
+        record OnFail(String hint)   implements Annotation {}
     }
 
     // ── Statements ────────────────────────────────────────────────────────────
@@ -111,8 +127,9 @@ public interface Node {
             Expr.FnCall, Expr.MethodCall, Expr.FieldAccess, Expr.IndexAccess,
             Expr.BinOp, Expr.UnaryOp, Expr.Pipe,
             Expr.Match, Expr.BlockExpr, Expr.ListLit, Expr.MapLit,
+            Expr.TupleLit,
             Expr.Propagate, Expr.TrustedExpr, Expr.UntrustedExpr,
-            Expr.InterpolatedStr {
+            Expr.InterpolatedStr, Expr.Lambda {
 
         record IntLit(long value, Pos pos)          implements Expr {}
         record FloatLit(double value, Pos pos)      implements Expr {}
@@ -140,6 +157,8 @@ public interface Node {
         record BlockExpr(List<Stmt> stmts, Expr value, Pos pos)          implements Expr {}
         record ListLit(List<Expr> elements, Pos pos)                     implements Expr {}
         record MapLit(List<MapEntry> entries, Pos pos)                   implements Expr {}
+        /** Tuple literal: {@code (a, b, c)}. Always has ≥ 2 elements. */
+        record TupleLit(List<Expr> elements, Pos pos)                    implements Expr {}
         record Propagate(Expr inner, Pos pos)                            implements Expr {}
         /** Marks a value as explicitly trusted — safe to pass to @trusted fns. */
         record TrustedExpr(Expr inner, Pos pos)                          implements Expr {}
@@ -151,6 +170,11 @@ public interface Node {
          * e.g. ["Hello ", VarRef("name"), ", score=", VarRef("score"), ""]
          */
         record InterpolatedStr(List<Object> parts, Pos pos)              implements Expr {}
+        /**
+         * Anonymous function (lambda): {@code fn(x: Int) -> Int { x * 2 }}.
+         * Can be stored in a variable, passed as an argument, or used inline.
+         */
+        record Lambda(List<Param> params, TypeRef returnType, Stmt.Block body, Pos pos) implements Expr {}
     }
 
     /** A match arm with an optional guard: pattern [if guard] => body */
@@ -179,7 +203,7 @@ public interface Node {
             Pattern.BoolPat, Pattern.NonePat, Pattern.SomePat,
             Pattern.OkPat, Pattern.ErrPat,
             Pattern.EnumPat, Pattern.EnumTuplePat, Pattern.EnumRecordPat,
-            Pattern.RecordPat, Pattern.Bind {
+            Pattern.RecordPat, Pattern.TuplePat, Pattern.Bind {
 
         record Wildcard()                                           implements Pattern {}
         record IntPat(long value)                                   implements Pattern {}
@@ -194,6 +218,8 @@ public interface Node {
         record EnumTuplePat(String typeName, String variant, List<Pattern> fields) implements Pattern {}
         record EnumRecordPat(String typeName, String variant, List<FieldPat> fields) implements Pattern {}
         record RecordPat(String typeName, List<FieldPat> fields)    implements Pattern {}
+        /** Tuple pattern: {@code (a, b, c)} — each element is a sub-pattern. */
+        record TuplePat(List<Pattern> elements)                     implements Pattern {}
         record Bind(String name)                                    implements Pattern {}
     }
 
@@ -203,7 +229,7 @@ public interface Node {
     sealed interface TypeRef permits
             TypeRef.IntT, TypeRef.FloatT, TypeRef.BoolT, TypeRef.StrT, TypeRef.UnitT,
             TypeRef.OptionT, TypeRef.ResultT, TypeRef.ListT, TypeRef.MapT,
-            TypeRef.Named, TypeRef.FnT {
+            TypeRef.Named, TypeRef.TupleT, TypeRef.FnT {
 
         record IntT()                                                   implements TypeRef {}
         record FloatT()                                                 implements TypeRef {}
@@ -215,6 +241,8 @@ public interface Node {
         record ListT(TypeRef element)                                   implements TypeRef {}
         record MapT(TypeRef key, TypeRef value)                         implements TypeRef {}
         record Named(String name, List<TypeRef> args)                   implements TypeRef {}
+        /** Tuple type: {@code (Int, Str, Bool)}. Always has ≥ 2 elements. */
+        record TupleT(List<TypeRef> elements)                           implements TypeRef {}
         record FnT(List<TypeRef> params, TypeRef returnType)            implements TypeRef {}
     }
 }

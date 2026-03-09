@@ -5,26 +5,35 @@
 //   @tool        — marks a function as callable by an AI agent
 //   @requires    — pre-condition checked before the body runs
 //   @ensures     — post-condition checked after the body returns (binds `result`)
+//   @on_fail     — wraps any tool failure as err(ToolError{hint,cause}) for agents
 //   @timeout     — maximum execution time in milliseconds
 //   @untrusted   — declares that all inputs arrive from an external / agent source
-//   describe     — inline doc-string embedded in the function (shows up in JSON descriptor)
+//   describe     — inline doc-string embedded in the function (shown in JSON descriptor)
 //   assert       — runtime-checked invariant with an explanatory message
 //
-// New features used here:
+// Features used here:
 //   const          — shared limits / messages defined once
 //   string interp  — "You got ${score} / ${TOTAL}" instead of concatenation
 //   pattern guards — match score { n if n == TOTAL => ... }
 //   ?              — error propagation in parse_int_answer
 //   break          — quiz loop exits cleanly when user types "quit"
+//   @on_fail       — structured error hints for agent self-correction
+//   refinement type — Score = Int where { self >= 0 and self <= TOTAL }
+//   lambda         — fn(a: Str) -> Str passed to normalise answers
 
 const TOTAL: Int = 3
 const BORDER: Str = "+======================================+"
+
+// ── Refinement type: Score is always in [0, TOTAL] ───────────────────────────
+// The runtime checks this constraint on every assignment.
+type Score = Int where { self >= 0 and self <= 3 }
 
 // ── Arithmetic tool ───────────────────────────────────────────────────────────
 @tool
 @pure
 @requires(b != 0)
 @ensures(result * b == a - a % b)
+@on_fail("b must not be zero. Please retry with a non-zero divisor.")
 fn safe_div(a: Int, b: Int) -> Int {
     describe "Divides a by b. Requires b != 0. Safe for agent use."
     return a / b
@@ -36,6 +45,7 @@ fn safe_div(a: Int, b: Int) -> Int {
 @untrusted
 @timeout(500)
 @requires(raw_input != "")
+@on_fail("Input was empty or blank. Please provide a non-whitespace string.")
 fn sanitise(raw_input: Str) -> Str {
     describe "Trims whitespace from agent-supplied input and validates it is non-empty."
     let trimmed = raw_input.trim()
@@ -50,10 +60,26 @@ fn sanitise(raw_input: Str) -> Str {
 @requires(score <= total)
 @ensures(result >= 0)
 @ensures(result <= total)
+@on_fail("Score out of range. score must be in [0, total].")
 fn award_point(score: Int, total: Int, correct: Bool) -> Int {
     describe "Awards one point when correct is true. Score must be in [0, total]."
     if correct { return score + 1 }
     return score
+}
+
+// ── Answer normaliser — uses a lambda to trim and lowercase in one pass ───────
+// Demonstrates passing fn(...) as a value to a helper.
+@pure fn normalise(answer: Str) -> Str {
+    // build a pipeline: trim whitespace, then lowercase
+    let steps = [
+        fn(s: Str) -> Str { return s.trim() },
+        fn(s: Str) -> Str { return s.lower() },
+    ]
+    mut out = answer
+    for step in steps {
+        out = step(out)
+    }
+    return out
 }
 
 // ── Verdict helper — pattern guards replace nested ifs ───────────────────────
@@ -75,50 +101,74 @@ fn award_point(score: Int, total: Int, correct: Bool) -> Int {
     print("Type 'quit' at any question to exit early.")
     print("")
 
-    mut score = 0
+    // Score is a refinement type: runtime enforces 0 <= score <= 3
+    mut score: Score = 0
+    mut done = false
 
-    // Q1 — safe_div sanity-check exercise
-    print("Q1: What is 10 / 2?")
-    let a1 = sanitise(input())
-    if a1 == "quit" { break }
-    let v1 = safe_div(10, 2)
-    assert v1 == 5, "safe_div sanity check"
-    if a1 == "5" {
-        score = award_point(score, TOTAL, true)
-        print("  [CORRECT]  (verified via safe_div: ${v1})")
-    } else {
-        score = award_point(score, TOTAL, false)
-        print("  [WRONG]  The answer is 5.")
+    // ── Q1 — safe_div sanity-check ────────────────────────────────────────────
+    while not done {
+        print("Q1: What is 10 / 2?")
+        let a1 = sanitise(input())
+        if normalise(a1) == "quit" {
+            done = true
+            break
+        }
+        // safe_div has @on_fail: if b were 0 it would return err(ToolError{...})
+        // Here b=2 so it succeeds and returns a plain Int.
+        let v1 = safe_div(10, 2)
+        assert v1 == 5, "safe_div sanity check"
+        if normalise(a1) == "5" {
+            score = award_point(score, TOTAL, true)
+            print("  [CORRECT]  (verified via safe_div: ${v1})")
+        } else {
+            score = award_point(score, TOTAL, false)
+            print("  [WRONG]  The answer is 5.")
+        }
+        print("")
+        break
     }
-    print("")
 
-    // Q2 — geography
-    print("Q2: What is the capital of France?")
-    let a2 = sanitise(input())
-    if a2 == "quit" { break }
-    if a2 == "Paris" {
-        score = award_point(score, TOTAL, true)
-        print("  [CORRECT]")
-    } else {
-        score = award_point(score, TOTAL, false)
-        print("  [WRONG]  The answer is Paris.")
+    // ── Q2 — geography ────────────────────────────────────────────────────────
+    while not done {
+        print("Q2: What is the capital of France?")
+        let a2 = sanitise(input())
+        if normalise(a2) == "quit" {
+            done = true
+            break
+        }
+        if normalise(a2) == "paris" {
+            score = award_point(score, TOTAL, true)
+            print("  [CORRECT]")
+        } else {
+            score = award_point(score, TOTAL, false)
+            print("  [WRONG]  The answer is Paris.")
+        }
+        print("")
+        break
     }
-    print("")
 
-    // Q3 — multiplication
-    print("Q3: What is 7 * 6?")
-    let a3 = sanitise(input())
-    if a3 == "quit" { break }
-    if a3 == "42" {
-        score = award_point(score, TOTAL, true)
-        print("  [CORRECT]")
-    } else {
-        score = award_point(score, TOTAL, false)
-        print("  [WRONG]  The answer is 42.")
+    // ── Q3 — multiplication ───────────────────────────────────────────────────
+    while not done {
+        print("Q3: What is 7 * 6?")
+        let a3 = sanitise(input())
+        if normalise(a3) == "quit" {
+            done = true
+            break
+        }
+        if normalise(a3) == "42" {
+            score = award_point(score, TOTAL, true)
+            print("  [CORRECT]")
+        } else {
+            score = award_point(score, TOTAL, false)
+            print("  [WRONG]  The answer is 42.")
+        }
+        print("")
+        break
     }
-    print("")
 
-    print(BORDER)
-    print("  ${verdict(score)}")
-    print(BORDER)
+    if not done {
+        print(BORDER)
+        print("  ${verdict(score)}")
+        print(BORDER)
+    }
 }

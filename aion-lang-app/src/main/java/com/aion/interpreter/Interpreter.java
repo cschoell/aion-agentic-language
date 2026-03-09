@@ -41,6 +41,8 @@ public final class Interpreter {
     // ── State ─────────────────────────────────────────────────────────────────
 
     private final Environment globals;
+    /** Refinement constraints keyed by type alias name. null value = no constraint. */
+    private final Map<String, Node.Expr> refinements = new HashMap<>();
 
     public Interpreter() {
         this.globals = Environment.global();
@@ -50,12 +52,16 @@ public final class Interpreter {
     // ── Public API ────────────────────────────────────────────────────────────
 
     public void loadModule(Node.Module module) {
-        // First pass: register all top-level functions and constants
+        // First pass: register all top-level functions, constants, and type refinements
         for (Node decl : module.decls()) {
             if (decl instanceof FnDecl fn) {
                 globals.define(fn.name(), new AionValue.FnVal(fn, globals));
             } else if (decl instanceof Node.ConstDecl c) {
                 globals.define(c.name(), evalExpr(c.value(), globals));
+            } else if (decl instanceof Node.TypeDecl td
+                    && td.body() instanceof Node.TypeDeclBody.Alias alias
+                    && alias.constraint() != null) {
+                refinements.put(td.name(), alias.constraint());
             }
         }
     }
@@ -80,7 +86,32 @@ public final class Interpreter {
         for (int i = 0; i < params.size(); i++) {
             env.define(params.get(i).name(), args.get(i));
         }
+        // ── Check refinement types on parameters ──────────────────────────────
+        for (int i = 0; i < params.size(); i++) {
+            checkRefinement(params.get(i).type(), args.get(i), env, params.get(i).name());
+        }
 
+        // ── Resolve @on_fail hint (null when not present) ─────────────────────
+        String onFailHint = fn.decl().annotations().stream()
+                .filter(a -> a instanceof Node.Annotation.OnFail)
+                .map(a -> ((Node.Annotation.OnFail) a).hint())
+                .findFirst().orElse(null);
+
+        try {
+            return callFnInner(fn, env, onFailHint);
+        } catch (RuntimeException ex) {
+            // If @on_fail is present, wrap any failure as err(ToolError{hint,cause})
+            if (onFailHint != null) {
+                Map<String, AionValue> fields = new LinkedHashMap<>();
+                fields.put("hint",  new AionValue.StrVal(onFailHint));
+                fields.put("cause", new AionValue.StrVal(ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+                return new AionValue.ErrVal(new AionValue.RecordVal("ToolError", fields));
+            }
+            throw ex;
+        }
+    }
+
+    private AionValue callFnInner(AionValue.FnVal fn, Environment env, String onFailHint) {
         // ── Enforce @requires pre-conditions ──────────────────────────────────
         for (Node.Annotation ann : fn.decl().annotations()) {
             if (ann instanceof Node.Annotation.Requires req) {
@@ -113,7 +144,10 @@ public final class Interpreter {
         }
 
         // ── Enforce @ensures post-conditions ──────────────────────────────────
-        env.define("result", result);
+        // Bind both the named-return variable (if any) and the legacy "result" name
+        String retBinding = fn.decl().namedReturn() != null ? fn.decl().namedReturn() : "result";
+        env.define(retBinding, result);
+        if (!retBinding.equals("result")) env.define("result", result); // keep backward compat
         for (Node.Annotation ann : fn.decl().annotations()) {
             if (ann instanceof Node.Annotation.Ensures ens) {
                 AionValue cond = evalExpr(ens.condition(), env);
@@ -159,8 +193,16 @@ public final class Interpreter {
 
     private void execStmt(Stmt stmt, Environment env) {
         switch (stmt) {
-            case Stmt.Let s -> env.define(s.name(), evalExpr(s.value(), env));
-            case Stmt.Mut s -> env.define(s.name(), evalExpr(s.value(), env));
+            case Stmt.Let s -> {
+                AionValue val = evalExpr(s.value(), env);
+                checkRefinement(s.type(), val, env, s.name());
+                env.define(s.name(), val);
+            }
+            case Stmt.Mut s -> {
+                AionValue val = evalExpr(s.value(), env);
+                checkRefinement(s.type(), val, env, s.name());
+                env.define(s.name(), val);
+            }
             case Stmt.Assign s -> execAssign(s, env);
             case Stmt.Return s -> throw new ReturnSignal(
                     s.value() != null ? evalExpr(s.value(), env) : new AionValue.UnitVal());
@@ -302,6 +344,11 @@ public final class Interpreter {
                 for (MapEntry me : e.entries()) map.put(evalExpr(me.key(), env), evalExpr(me.value(), env));
                 yield new AionValue.MapVal(map);
             }
+            case Expr.TupleLit e -> {
+                List<AionValue> elems = new ArrayList<>();
+                for (Expr el : e.elements()) elems.add(evalExpr(el, env));
+                yield new AionValue.TupleVal(List.copyOf(elems));
+            }
             case Expr.Propagate e -> {
                 AionValue inner = evalExpr(e.inner(), env);
                 yield switch (inner) {
@@ -323,6 +370,13 @@ public final class Interpreter {
                 }
                 yield new AionValue.StrVal(sb.toString());
             }
+            case Expr.Lambda e -> {
+                // Wrap the lambda as an anonymous FnDecl and capture the current environment
+                FnDecl synth = new FnDecl(
+                        List.of(), "__lambda__", List.of(),
+                        e.params(), e.returnType(), null, e.body(), e.pos());
+                yield new AionValue.FnVal(synth, env);
+            }
         };
     }
 
@@ -332,10 +386,17 @@ public final class Interpreter {
         return new AionValue.RecordVal(e.typeName(), fields);
     }
 
+    /** Names that are handled as built-in functions (evaluated without a user FnDecl). */
+    private static final Set<String> BUILTIN_NAMES = Set.of(
+            "print", "input", "str", "int", "float", "len",
+            "assert", "is_some", "is_none", "is_ok", "is_err", "unwrap", "unwrap_or");
+
     private AionValue evalFnCall(Expr.FnCall e, Environment env) {
-        // Check builtins first, then user functions
-        Optional<AionValue> builtin = tryCallBuiltin(e.name(), e.args(), env);
-        if (builtin.isPresent()) return builtin.get();
+        // Evaluate args exactly ONCE to avoid double-executing side-effectful
+        // expressions (e.g. input()) when a user function wraps a builtin call.
+        if (BUILTIN_NAMES.contains(e.name())) {
+            return callBuiltin(e.name(), e.args(), env);
+        }
 
         AionValue fn = env.lookup(e.name());
         if (!(fn instanceof AionValue.FnVal fnVal)) {
@@ -467,6 +528,14 @@ public final class Interpreter {
                 }
                 yield true;
             }
+            case Pattern.TuplePat p -> {
+                if (!(val instanceof AionValue.TupleVal tv)) yield false;
+                if (tv.elements().size() != p.elements().size()) yield false;
+                for (int i = 0; i < p.elements().size(); i++) {
+                    if (!matchPattern(p.elements().get(i), tv.elements().get(i), bindings)) yield false;
+                }
+                yield true;
+            }
         };
     }
 
@@ -564,6 +633,29 @@ public final class Interpreter {
         };
     }
 
+    /**
+     * If {@code typeRef} names a refined alias (one with a {@code where} clause),
+     * evaluate the constraint with {@code self} bound to {@code value}.
+     * Throws {@link AionRuntimeException} when the constraint is violated.
+     */
+    private void checkRefinement(Node.TypeRef typeRef, AionValue value, Environment env, String bindingName) {
+        if (typeRef == null) return;
+        String typeName = switch (typeRef) {
+            case Node.TypeRef.Named n -> n.name();
+            default -> null;
+        };
+        if (typeName == null) return;
+        Node.Expr constraint = refinements.get(typeName);
+        if (constraint == null) return;
+        Environment checkEnv = env.child();
+        checkEnv.define("self", value);
+        AionValue result = evalExpr(constraint, checkEnv);
+        if (!isTruthy(result))
+            throw new AionRuntimeException(
+                    "Refinement constraint for type '" + typeName + "' violated" +
+                    " when assigning to '" + bindingName + "': value = " + value);
+    }
+
     private List<AionValue> resolveArgs(List<Arg> args, List<Param> params, Environment env) {
         if (args.isEmpty()) return List.of();
         // Build name→index map for named args
@@ -598,55 +690,61 @@ public final class Interpreter {
     }
 
     private void registerBuiltins() {
-        // No-op: builtins are dispatched in tryCallBuiltin
+        // No-op: builtins are dispatched in callBuiltin
     }
 
-    private Optional<AionValue> tryCallBuiltin(String name, List<Arg> args, Environment env) {
+    /**
+     * Invoke a known built-in function. Args are evaluated exactly once here.
+     * Only call this after confirming {@code name} is in {@link #BUILTIN_NAMES}.
+     */
+    private AionValue callBuiltin(String name, List<Arg> args, Environment env) {
+        // input() reads stdin — evaluate NO args before the call
+        if ("input".equals(name)) return new AionValue.StrVal(stdin().nextLine());
+
         List<AionValue> vals = new ArrayList<>();
         for (Arg a : args) vals.add(resolveArg(a, env));
 
         return switch (name) {
             case "print"   -> { System.out.println(vals.stream().map(Object::toString)
-                                    .reduce((a,b)->a+" "+b).orElse("")); yield Optional.of(new AionValue.UnitVal()); }
-            case "input"   -> Optional.of(new AionValue.StrVal(stdin().nextLine()));
-            case "str"     -> Optional.of(new AionValue.StrVal(vals.get(0).toString()));
-            case "int"     -> Optional.of(switch (vals.get(0)) {
+                                    .reduce((a,b)->a+" "+b).orElse("")); yield new AionValue.UnitVal(); }
+            case "str"     -> new AionValue.StrVal(vals.get(0).toString());
+            case "int"     -> switch (vals.get(0)) {
                                 case AionValue.StrVal s   -> new AionValue.IntVal(Long.parseLong(s.value()));
                                 case AionValue.FloatVal f -> new AionValue.IntVal((long) f.value());
                                 default -> vals.get(0);
-                             });
-            case "float"   -> Optional.of(switch (vals.get(0)) {
+                             };
+            case "float"   -> switch (vals.get(0)) {
                                 case AionValue.StrVal s   -> new AionValue.FloatVal(Double.parseDouble(s.value()));
                                 case AionValue.IntVal i   -> new AionValue.FloatVal(i.value());
                                 default -> vals.get(0);
-                             });
-            case "len"     -> Optional.of(switch (vals.get(0)) {
+                             };
+            case "len"     -> switch (vals.get(0)) {
                                 case AionValue.ListVal l -> new AionValue.IntVal(l.elements().size());
                                 case AionValue.StrVal  s -> new AionValue.IntVal(s.value().length());
                                 case AionValue.MapVal  m -> new AionValue.IntVal(m.entries().size());
                                 default -> throw new AionRuntimeException("len() not supported for " + vals.get(0));
-                             });
+                             };
             case "assert"  -> {
                 if (!isTruthy(vals.get(0)))
                     throw new AionRuntimeException("Assertion failed" +
                             (vals.size() > 1 ? ": " + vals.get(1) : ""));
-                yield Optional.of(new AionValue.UnitVal());
+                yield new AionValue.UnitVal();
             }
-            case "is_some" -> Optional.of(new AionValue.BoolVal(vals.get(0) instanceof AionValue.SomeVal));
-            case "is_none" -> Optional.of(new AionValue.BoolVal(vals.get(0) instanceof AionValue.NoneVal));
-            case "is_ok"   -> Optional.of(new AionValue.BoolVal(vals.get(0) instanceof AionValue.OkVal));
-            case "is_err"  -> Optional.of(new AionValue.BoolVal(vals.get(0) instanceof AionValue.ErrVal));
-            case "unwrap"  -> Optional.of(switch (vals.get(0)) {
+            case "is_some"   -> new AionValue.BoolVal(vals.get(0) instanceof AionValue.SomeVal);
+            case "is_none"   -> new AionValue.BoolVal(vals.get(0) instanceof AionValue.NoneVal);
+            case "is_ok"     -> new AionValue.BoolVal(vals.get(0) instanceof AionValue.OkVal);
+            case "is_err"    -> new AionValue.BoolVal(vals.get(0) instanceof AionValue.ErrVal);
+            case "unwrap"    -> switch (vals.get(0)) {
                                 case AionValue.SomeVal sv -> sv.inner();
                                 case AionValue.OkVal  ov -> ov.inner();
                                 default -> throw new AionRuntimeException("unwrap() called on " + vals.get(0));
-                             });
-            case "unwrap_or" -> Optional.of(switch (vals.get(0)) {
+                             };
+            case "unwrap_or" -> switch (vals.get(0)) {
                                 case AionValue.SomeVal sv -> sv.inner();
                                 case AionValue.OkVal  ov -> ov.inner();
                                 default -> vals.get(1);
-                             });
-            default -> Optional.empty();
+                             };
+            default -> throw new AionRuntimeException("Unknown builtin: " + name);
         };
     }
 
@@ -692,14 +790,16 @@ public final class Interpreter {
                 default -> throw new AionRuntimeException("Map has no method '" + method + "'");
             };
             case AionValue.StrVal s -> switch (method) {
-                case "len"       -> new AionValue.IntVal(s.value().length());
-                case "contains"  -> new AionValue.BoolVal(s.value().contains(((AionValue.StrVal)args.get(0)).value()));
-                case "starts_with"->new AionValue.BoolVal(s.value().startsWith(((AionValue.StrVal)args.get(0)).value()));
-                case "ends_with" -> new AionValue.BoolVal(s.value().endsWith(((AionValue.StrVal)args.get(0)).value()));
-                case "upper"     -> new AionValue.StrVal(s.value().toUpperCase());
-                case "lower"     -> new AionValue.StrVal(s.value().toLowerCase());
-                case "trim"      -> new AionValue.StrVal(s.value().trim());
-                case "split"     -> {
+                case "len"        -> new AionValue.IntVal(s.value().length());
+                case "contains"   -> new AionValue.BoolVal(s.value().contains(((AionValue.StrVal)args.get(0)).value()));
+                case "starts_with"-> new AionValue.BoolVal(s.value().startsWith(((AionValue.StrVal)args.get(0)).value()));
+                case "ends_with"  -> new AionValue.BoolVal(s.value().endsWith(((AionValue.StrVal)args.get(0)).value()));
+                case "upper"      -> new AionValue.StrVal(s.value().toUpperCase());
+                case "lower"      -> new AionValue.StrVal(s.value().toLowerCase());
+                case "trim"       -> new AionValue.StrVal(s.value().trim());
+                case "replace"    -> new AionValue.StrVal(s.value().replace(
+                        ((AionValue.StrVal)args.get(0)).value(), ((AionValue.StrVal)args.get(1)).value()));
+                case "split"      -> {
                     String delim = ((AionValue.StrVal)args.get(0)).value();
                     List<AionValue> parts = new ArrayList<>();
                     for (String p : s.value().split(java.util.regex.Pattern.quote(delim)))
@@ -707,6 +807,18 @@ public final class Interpreter {
                     yield new AionValue.ListVal(parts);
                 }
                 default -> throw new AionRuntimeException("Str has no method '" + method + "'");
+            };
+            case AionValue.TupleVal t -> switch (method) {
+                case "len"    -> new AionValue.IntVal(t.elements().size());
+                case "get"    -> {
+                    int i = (int)((AionValue.IntVal)args.get(0)).value();
+                    if (i < 0 || i >= t.elements().size())
+                        throw new AionRuntimeException("Tuple index out of bounds: " + i);
+                    yield t.elements().get(i);
+                }
+                case "first"  -> t.elements().get(0);
+                case "second" -> t.elements().get(1);
+                default -> throw new AionRuntimeException("Tuple has no method '" + method + "'");
             };
             default -> throw new AionRuntimeException("No method '" + method + "' on " + receiver);
         };

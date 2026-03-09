@@ -223,6 +223,10 @@ public class AionCli implements Callable<Integer> {
                         .findFirst().orElse(-1L);
                 boolean trusted   = fn.annotations().stream().anyMatch(a -> a instanceof Node.Annotation.TrustedAnn);
                 boolean untrusted = fn.annotations().stream().anyMatch(a -> a instanceof Node.Annotation.UntrustedAnn);
+                String onFail = fn.annotations().stream()
+                        .filter(a -> a instanceof Node.Annotation.OnFail)
+                        .map(a -> ((Node.Annotation.OnFail) a).hint())
+                        .findFirst().orElse(null);
 
                 sb.append("  {\n");
                 sb.append("    \"name\": \"").append(fn.name()).append("\",\n");
@@ -242,7 +246,8 @@ public class AionCli implements Callable<Integer> {
                 sb.append("    \"timeout_ms\": ").append(timeout < 0 ? "null" : timeout).append(",\n");
                 sb.append("    \"input_trust\": \"")
                   .append(trusted ? "trusted" : untrusted ? "untrusted" : "unspecified")
-                  .append("\"\n");
+                  .append("\",\n");
+                sb.append("    \"on_fail_hint\": ").append(onFail != null ? "\"" + escape(onFail) + "\"" : "null").append("\n");
                 sb.append("  }");
             }
             sb.append("\n]");
@@ -295,6 +300,7 @@ public class AionCli implements Callable<Integer> {
                 case Node.TypeRef.ListT   l -> "List[" + typeStr(l.element()) + "]";
                 case Node.TypeRef.MapT    m -> "Map[" + typeStr(m.key()) + ", " + typeStr(m.value()) + "]";
                 case Node.TypeRef.Named   n -> n.name();
+                case Node.TypeRef.TupleT  tt -> "(" + tt.elements().stream().map(this::typeStr).reduce((a,b)->a+", "+b).orElse("") + ")";
                 case Node.TypeRef.FnT     f -> "Fn";
             };
         }

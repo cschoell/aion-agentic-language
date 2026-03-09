@@ -80,8 +80,9 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
     @Override
     public Node visitAliasTypeDecl(AionParser.AliasTypeDeclContext ctx) {
         List<String> tp = convertTypeParams(ctx.typeParams());
+        Expr constraint = ctx.WHERE() != null ? buildExpr(ctx.expr()) : null;
         return new TypeDecl(ctx.TYPE_IDENT().getText(), tp,
-                new TypeDeclBody.Alias(convertTypeRef(ctx.typeRef())), pos(ctx));
+                new TypeDeclBody.Alias(convertTypeRef(ctx.typeRef()), constraint), pos(ctx));
     }
 
     private List<String> convertTypeParams(AionParser.TypeParamsContext ctx) {
@@ -129,9 +130,18 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
         if (ctx.paramList() != null)
             for (var p : ctx.paramList().param())
                 params.add(new Param(p.IDENT().getText(), convertTypeRef(p.typeRef())));
-        TypeRef ret   = convertTypeRef(ctx.returnType().typeRef());
+        // Named return: -> (name: Type)  vs plain: -> Type
+        String namedReturn = null;
+        TypeRef ret;
+        var rt = ctx.returnType();
+        if (rt instanceof AionParser.NamedReturnContext nr) {
+            namedReturn = nr.IDENT().getText();
+            ret = convertTypeRef(nr.typeRef());
+        } else {
+            ret = convertTypeRef(((AionParser.PlainReturnContext) rt).typeRef());
+        }
         Stmt.Block body = buildBlock(ctx.block());
-        return new FnDecl(anns, ctx.IDENT().getText(), tp, params, ret, body, pos(ctx));
+        return new FnDecl(anns, ctx.IDENT().getText(), tp, params, ret, namedReturn, body, pos(ctx));
     }
 
     private Annotation convertAnnotation(AionParser.AnnotationContext ctx) {
@@ -144,6 +154,7 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
         if (ctx.ANN_TOOL()        != null) return new Annotation.Tool();
         if (ctx.ANN_TRUSTED()     != null) return new Annotation.TrustedAnn();
         if (ctx.ANN_UNTRUSTED()   != null) return new Annotation.UntrustedAnn();
+        if (ctx.ANN_ON_FAIL()     != null) return new Annotation.OnFail(stripQuotes(ctx.STR_LIT().getText()));
         if (ctx.ANN_REQUIRES()    != null) return new Annotation.Requires(buildExpr(ctx.expr()));
         if (ctx.ANN_ENSURES()     != null) return new Annotation.Ensures(buildExpr(ctx.expr()));
         if (ctx.ANN_TIMEOUT()     != null) return new Annotation.Timeout(Long.parseLong(ctx.INT_LIT().getText()));
@@ -369,6 +380,12 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
             case AionParser.BlockExprRefContext  c -> buildBlockExpr(c.blockExpr());
             case AionParser.ListLitRefContext    c -> buildListLit(c.listLit());
             case AionParser.MapLitRefContext     c -> buildMapLit(c.mapLit());
+            case AionParser.LambdaExprContext    c -> buildLambda(c);
+            case AionParser.TupleLitRefContext c -> {
+                List<Expr> elems = new ArrayList<>();
+                for (var e : c.tupleLit().expr()) elems.add(buildExpr(e));
+                yield new Expr.TupleLit(elems, pos(c));
+            }
             case AionParser.ParensContext        c -> buildExpr(c.expr());
             default -> throw new AionParseException("Unknown primary", pos(ctx));
         };
@@ -412,6 +429,17 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
             arms.add(new MatchArm(pat, guard, bodyExpr));
         }
         return new Expr.Match(subject, arms, pos(ctx));
+    }
+
+    /** Build a lambda expression: {@code fn(x: Int, y: Int) -> Int { x + y }}. */
+    private Expr buildLambda(AionParser.LambdaExprContext ctx) {
+        List<Param> params = new ArrayList<>();
+        if (ctx.paramList() != null)
+            for (var p : ctx.paramList().param())
+                params.add(new Param(p.IDENT().getText(), convertTypeRef(p.typeRef())));
+        TypeRef ret   = convertTypeRef(ctx.typeRef());
+        Stmt.Block body = buildBlock(ctx.block());
+        return new Expr.Lambda(params, ret, body, pos(ctx));
     }
 
     /**
@@ -495,6 +523,11 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
                             buildFieldPatterns(c.fieldPattern()));
             case AionParser.RecordPatternContext c ->
                     new Pattern.RecordPat(c.TYPE_IDENT().getText(), buildFieldPatterns(c.fieldPattern()));
+            case AionParser.TuplePatternContext c -> {
+                List<Pattern> elems = new ArrayList<>();
+                for (var p : c.pattern()) elems.add(convertPattern(p));
+                yield new Pattern.TuplePat(elems);
+            }
             case AionParser.BindPatternContext c -> new Pattern.Bind(c.IDENT().getText());
             default -> throw new AionParseException("Unknown pattern", pos(ctx));
         };
@@ -530,6 +563,11 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
                 List<TypeRef> args = new ArrayList<>();
                 for (var t : c.typeRef()) args.add(convertTypeRef(t));
                 yield new TypeRef.Named(c.TYPE_IDENT().getText(), args);
+            }
+            case AionParser.TupleTypeContext c -> {
+                List<TypeRef> elems = new ArrayList<>();
+                for (var t : c.typeRef()) elems.add(convertTypeRef(t));
+                yield new TypeRef.TupleT(elems);
             }
             case AionParser.FnTypeContext c -> {
                 List<AionParser.TypeRefContext> all = c.typeRef();

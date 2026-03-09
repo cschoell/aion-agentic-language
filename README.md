@@ -2,7 +2,7 @@
 
 A programming language designed to be **optimal for AI agents to generate and reason about**, while remaining readable for humans.
 
-> **Version 0.3.0-dev** — Tree-walking interpreter + bytecode compiler/VM · 72 passing tests · Pre-type-checker
+> **Version 0.4.0-dev** — Tree-walking interpreter + bytecode compiler/VM · 82 passing tests · Pre-type-checker
 
 ## Design Principles
 
@@ -21,6 +21,7 @@ An AI can predict the full syntactic shape from the first token alone:
 | `import` | module import |
 | `@pure` `@io` `@async` | effect annotation (precedes `fn`) |
 | `@tool` `@requires` `@ensures` | agent-contract annotation (precedes `fn`) |
+| `@on_fail` | structured failure hint for agent-callable tools |
 
 ### 2. Effect annotations on every function
 ```aion
@@ -36,12 +37,13 @@ An AI can reason about what a function does without reading its body.
 @pure
 @requires(b != 0)
 @ensures(result * b == a - a % b)
+@on_fail("b must not be zero — retry with a non-zero divisor.")
 fn safe_div(a: Int, b: Int) -> Int {
     describe "Divides a by b. Safe for agent use."
     return a / b
 }
 ```
-`@tool` marks an agent-callable function. `@requires` / `@ensures` are machine-checkable pre/post-conditions — the language's answer to unreliable natural-language prompts.
+`@tool` marks an agent-callable function. `@requires` / `@ensures` are machine-checkable pre/post-conditions. `@on_fail` wraps any failure as `err(ToolError { hint, cause })` so the agent loop can self-correct without unwrapping a Java stack trace.
 
 ### 4. No nulls — explicit Option and Result
 ```aion
@@ -143,6 +145,18 @@ let val = risky_call()?     // propagate Err/None
 
 // Pipeline
 let out = input |> trim |> parse |> validate
+
+// Lambda expressions (first-class functions)
+let double = fn(x: Int) -> Int { return x * 2 }
+let evens = numbers.filter(fn(x: Int) -> Bool { return x % 2 == 0 })
+let doubled = numbers.map(fn(x: Int) -> Int { return x * 2 })
+
+// Refinement types — constraint checked on every assignment
+type AgentID = Str   where { self.starts_with("did:aion:") }
+type Score   = Int   where { self >= 0 and self <= 100 }
+
+let id: AgentID = "did:aion:abc123"   // ok
+// let bad: AgentID = "not-an-id"    // runtime error: constraint violated
 
 // Loops with break / continue
 for item in list { ... }

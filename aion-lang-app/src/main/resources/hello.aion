@@ -1,4 +1,70 @@
-@pure fn main() -> Unit {
-    print("hello from bytecode")
+// ── hello.aion ────────────────────────────────────────────────────────────────
+// Quick-start: every new feature in one compact file.
+// Run with: aion-lang-app run hello.aion
+//           aion-lang-app compile hello.aion   (bytecode path)
+
+// ── const + string interpolation ─────────────────────────────────────────────
+const LANG: Str = "Aion"
+const VERSION: Int = 1
+
+// ── Refinement types ─────────────────────────────────────────────────────────
+type Positive = Int where { self > 0 }
+type Tag      = Str where { self.len() <= 16 }
+
+// ── @on_fail tool ─────────────────────────────────────────────────────────────
+@tool
+@pure
+@requires(b != 0)
+@on_fail("Divisor must not be zero.")
+fn divide(a: Int, b: Int) -> Int {
+    describe "Integer division. Safe for agent use."
+    return a / b
 }
 
+// ── Lambda / higher-order ─────────────────────────────────────────────────────
+@pure fn double_evens(xs: List[Int]) -> List[Int] {
+    let evens   = xs.filter(fn(x: Int) -> Bool { return x % 2 == 0 })
+    let doubled = evens.map(fn(x: Int) -> Int { return x * 2 })
+    return doubled
+}
+
+// ── Pattern guards ────────────────────────────────────────────────────────────
+@pure fn fizzbuzz(n: Int) -> Str {
+    return match n {
+        x if x % 15 == 0 => "FizzBuzz",
+        x if x % 3  == 0 => "Fizz",
+        x if x % 5  == 0 => "Buzz",
+        x                => "${x}",
+    }
+}
+
+@pure fn main() -> Unit {
+    // -- greeting --
+    print("Hello from Aion v1!")
+    print("")
+
+    // -- refinement types --
+    let p: Positive = 7
+    let t: Tag      = "hello-aion"
+    print("Positive: ${p}")
+    print("Tag:      ${t}")
+    print("")
+
+    // -- @on_fail tool --
+    let d = divide(20, 4)
+    print("divide(20, 4) = ${d}")
+    print("")
+
+    // -- lambda map + filter --
+    let nums = [1, 2, 3, 4, 5, 6]
+    let result = double_evens(nums)
+    print("double_evens([1..6]) = ${result}")
+    print("")
+
+    // -- pattern guards (fizzbuzz 1..15) --
+    mut i = 1
+    while i <= 15 {
+        print(fizzbuzz(i))
+        i = i + 1
+    }
+}

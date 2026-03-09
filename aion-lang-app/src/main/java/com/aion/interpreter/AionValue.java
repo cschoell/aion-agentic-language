@@ -23,6 +23,7 @@ public sealed interface AionValue permits
         AionValue.MapVal,
         AionValue.RecordVal,
         AionValue.EnumVal,
+        AionValue.TupleVal,
         AionValue.FnVal {
 
     record IntVal(long value)           implements AionValue { public String toString() { return String.valueOf(value); } }
@@ -50,6 +51,12 @@ public sealed interface AionValue permits
         public String toString() {
             return payload.isEmpty() ? typeName + "::" + variant
                     : typeName + "::" + variant + "(" + payload + ")";
+        }
+    }
+    /** Tuple value: an ordered, fixed-size collection of heterogeneous values. */
+    record TupleVal(List<AionValue> elements) implements AionValue {
+        public String toString() {
+            return "(" + elements.stream().map(Object::toString).reduce((a,b)->a+", "+b).orElse("") + ")";
         }
     }
     record FnVal(FnDecl decl, Environment closure) implements AionValue {

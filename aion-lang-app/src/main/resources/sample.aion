@@ -8,18 +8,26 @@
 //   - named arguments
 //   - for / while loops
 //
-// New features shown:
+// Features shown:
 //   const          — PI, MAX_USERS defined at the top
 //   string interp  — "${name}" instead of "Hello, " + name + "!"
 //   pattern guards — classify numbers and shapes by condition
 //   ?              — error propagation with Result
-//   break          — early loop exit
-//   continue       — skip unwanted iterations
+//   break/continue — early loop control
+//   @on_fail       — structured tool errors for agent loops
+//   refinement type — Tag = Str where constraint enforced on assignment
+//   lambda         — fn(x) -> T used with map / filter
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
 const PI: Float = 3.14159
 const MAX_USERS: Int = 10
+
+// ── Refinement types ───────────────────────────────────────────────────────
+// The runtime checks these constraints on every assignment.
+
+type PositiveInt = Int   where { self > 0 }
+type ShortStr    = Str   where { self.len() <= 20 }
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -111,6 +119,30 @@ enum Color {
     return none
 }
 
+// ── Tool function with @on_fail ────────────────────────────────────────────
+// If score < 0 or score > max, the agent gets a structured error instead of a crash.
+@tool
+@pure
+@requires(score >= 0)
+@requires(score <= max)
+@on_fail("score must be between 0 and max inclusive.")
+fn clamp_score(score: Int, max: Int) -> Int {
+    describe "Returns score unchanged. Pre-conditions enforce valid range."
+    return score
+}
+
+// ── Lambda / higher-order helpers ─────────────────────────────────────────
+
+// square each element — lambda passed to map
+@pure fn square_all(xs: List[Int]) -> List[Int] {
+    return xs.map(fn(x: Int) -> Int { return x * x })
+}
+
+// keep only elements above a threshold — lambda passed to filter
+@pure fn above(xs: List[Int], threshold: Int) -> List[Int] {
+    return xs.filter(fn(x: Int) -> Bool { return x > threshold })
+}
+
 // ── Pipeline helpers ───────────────────────────────────────────────────────
 
 @pure fn double_val(x: Int) -> Int { return x * 2 }
@@ -154,6 +186,33 @@ enum Color {
     }
     print("")
 
+    // -- Refinement types --
+    // PositiveInt constraint: any assignment of a non-positive value would fail
+    let p: PositiveInt = 42
+    print("PositiveInt p = ${p}")
+    // ShortStr constraint: strings up to 20 chars are accepted
+    let tag: ShortStr = "aion-agent-v1"
+    print("ShortStr tag  = ${tag}")
+    print("")
+
+    // -- Lambda: map and filter --
+    let nums = [1, 2, 3, 4, 5]
+    let squares = square_all(nums)
+    print("Squares:   ${squares}")
+    let big = above(nums, 3)
+    print("Above 3:   ${big}")
+
+    // inline lambda stored in a variable and called directly
+    let triple = fn(x: Int) -> Int { return x * 3 }
+    let tripled = nums.map(triple)
+    print("Tripled:   ${tripled}")
+    print("")
+
+    // -- @on_fail tool: valid call succeeds --
+    let cs = clamp_score(7, 10)
+    print("clamp_score(7, 10) = ${cs}")
+    print("")
+
     // -- List + break + continue --
     mut numbers = [1, 2, 3, 4, 5]
     numbers.push(6)
@@ -162,7 +221,7 @@ enum Color {
     mut even_sum = 0
     for n in numbers {
         if n > 5 { break }
-        if n == 3 { continue }         // skip 3 just to show continue
+        if n == 3 { continue }
         if n == 2 { even_sum = even_sum + n }
         if n == 4 { even_sum = even_sum + n }
     }
@@ -177,7 +236,7 @@ enum Color {
     mut count = 0
     while count < MAX_USERS {
         count = count + 1
-        if count == 3 { break }   // stop early to keep output short
+        if count == 3 { break }
     }
     print("Counted to ${count} (limit was ${MAX_USERS})")
     print("")

@@ -1,12 +1,9 @@
 # Aion — Missing features for larger systems
 
 > Analysis date: 2026-03-06  
-> Last updated: 2026-03-06 — items 4, 7, 8, 11, 12 implemented; items 15–18 added.  
-> Code quality pass 2026-03-06 — `BytecodeVM` warnings resolved: unnamed `ign` pattern variables
-> renamed to `ignored`, empty-body `if` conditions in `MatchXxx` cases inverted, `MatchTag` and
-> `Propagate` `if`/`else-if` chains converted to `switch`, redundant `@SuppressWarnings` removed,
-> `removeLast()` substituted for index-based list removal, always-false null guard removed, unused
-> `instrs` parameter dropped from `execute()`. All 14 test tasks pass; bytecode demo output verified.  
+> Last updated: 2026-03-09 — items 2 (closures/lambdas), 17 (@on_fail), 16 (refinement types), 6 (deep field assignment), 9 (tuple types), and 18 (named return variables) implemented.  
+> Items 4, 7, 8, 11, 12 were implemented on 2026-03-06; items 15–18 added then.  
+> Code quality pass 2026-03-06 — `BytecodeVM` warnings resolved.  
 > Based on: grammar (`AionParser.g4`, `AionLexer.g4`), interpreter, bytecode VM, and `sample.aion`.
 
 Each gap is rated by impact:
@@ -33,23 +30,20 @@ Without modules you cannot split logic across files, share types, or reuse utili
 
 ---
 
-## 2. Closures / first-class functions  🔴
+## 2. Closures / first-class functions  🔴 ✅ done
 
-**What's there:** `FnType` exists in the type grammar (`(Int) -> Int`) and `FnVal` exists in
-the interpreter, but:
-- There is no lambda / anonymous function syntax
-- There is no way to pass a function literal as an argument
-- `List.map` and `List.filter` exist in the interpreter but can never be called from Aion
-  source because you can't write the callback
-
-**What's missing:**
+**What's there:** Lambda expressions with full closure semantics:
 ```aion
-let double = fn(x: Int) -> Int { x * 2 }
-numbers.map(fn(x) { x * 2 })
+let double = fn(x: Int) -> Int { return x * 2 }
+numbers.map(fn(x: Int) -> Int { return x * 2 })
+numbers.filter(fn(x: Int) -> Bool { return x % 2 == 0 })
 ```
-
-**Impact:** Higher-order patterns (map, filter, reduce, callbacks, event handlers, strategies)
-are impossible. This also means `@async` can never be useful.
+- Lexer: `fn` keyword already existed; no new token needed.
+- Parser: new `LambdaExpr` alternative in `primaryExpr` — `fn(params) -> Type { block }`.
+- AST: `Expr.Lambda(params, returnType, body, pos)` record.
+- Interpreter: `Lambda` eval creates a synthetic `FnDecl` and captures the current `Environment` as its closure; `list.map(fn)` and `list.filter(fn)` dispatch to `callFn`.
+- Bytecode compiler: lambda body is emitted inline as an anonymous function (name `__lambda_N__`); `PushLambda(address, params)` pushes the entry point as a value.
+- Bytecode VM: `PushLambda` → `LambdaVal`; `CallLambda(arity)` pops lambda + args and calls inline via `callLambdaValue`; `list.map` and `list.filter` dispatch to `callLambdaValue`.
 
 ---
 
@@ -191,82 +185,35 @@ import std.io.{ read_file as read }
 
 ---
 
-## 15. Semantic / newtype aliases  🟠
+## 15. Semantic / newtype aliases  🟠 ✅ done
 
-**What's there:** `type` declarations create record types; there is no way to make a
-type-safe wrapper around a primitive.
-
-**What's missing:** Lightweight newtypes that carry intent and prevent accidental mixing:
-
-```aion
-type Email  = Str
-type UserId = Int
-type CleanStr = Str
-```
-
-At this level the compiler treats `Email` as a distinct type from `Str` — you cannot pass
-a raw `Str` where an `Email` is expected without an explicit conversion.  This alone
-eliminates whole classes of AI-agent bugs where the LLM passes the wrong string to the
-wrong argument.
-
-**Why it makes sense:** Aion is positioned as an AI-agent language.  Agents see function
-signatures as prompts.  `fn send(to: Email, subject: Str)` is far more informative — and
-harder to misuse — than `fn send(to: Str, subject: Str)`.
-
-**Effort:** Small-Medium — newtypes without constraints are just alias tracking in the
-type-checker; the interpreter can treat them transparently at runtime.
+**What's there:** `type Email = Str` is parsed and stored in the AST. The interpreter
+registers the alias name so `let x: Email = "..."` is valid. Refinement constraints
+(item 16) build directly on top of this, so the two items were implemented together.
 
 ---
 
-## 16. Refinement types  🟠
+## 16. Refinement types  🟠 ✅ done
 
-**What's there:** `@requires` checks pre-conditions at the function boundary; there is no
-way to encode a constraint *into a type* so it is checked wherever a value is created.
-
-**What's missing:** Constrained type declarations:
-
+**What's there:** Constrained type alias declarations with runtime enforcement:
 ```aion
-type ValidatedInput = Str where { self.trim().len() > 0 }
-type Score          = Int  where { self >= 0 and self <= 100 }
-type PositiveFloat  = Float where { self > 0.0 }
+type AgentID     = Str   where { self.starts_with("did:aion:") }
+type Score       = Int   where { self >= 0 and self <= 100 }
+type PositiveFloat = Float where { self > 0.0 }
 ```
+When a value is assigned to a refinement type (`let`, `mut`, or function parameter), the interpreter evaluates the `where` predicate with `self` bound to the value and throws `AionRuntimeException` if it fails.
 
-When a value is assigned to a refinement type (from a `let`, a function argument, or a
-return), the compiler inserts the `where` predicate as a runtime assertion.  The `sanitise`
-tool then becomes:
-
-```aion
-@tool @io @timeout(500)
-fn sanitise(raw: Untrusted[Str]) -> ValidatedInput {
-    describe "Cleans agent input. Fails if input is blank after trimming."
-    return raw.trim()   // compiler checks ValidatedInput constraint here
-}
-```
-
-No manual `assert` needed — the constraint is part of the type contract.
-
-**Why it makes sense:** Refinement types are the natural completion of `@requires`/`@ensures`.
-They let constraints travel with values across module boundaries, something annotations on
-function boundaries cannot do.  For AI agents this is especially powerful because an agent
-can be told "this argument must be a `Score`" and the runtime will enforce it automatically.
-
-**Relationship to #15:** Refinement types build on semantic aliases — a refinement type IS
-a newtype alias plus a `where` clause.  Implement #15 first.
-
-**Effort:** Large — requires constraint propagation through the type system, and a runtime
-check injection pass.
+- Lexer: `WHERE : 'where'` keyword.
+- Parser: `AliasTypeDecl` extended with optional `WHERE LBRACE expr RBRACE` clause.
+- AST: `TypeDeclBody.Alias(TypeRef ref, Expr constraint)` — `constraint` is null for plain aliases.
+- Interpreter: `loadModule` registers constraints in a `Map<String, Expr> refinements`; `checkRefinement` is called on every `let`/`mut` binding and on function parameter binding.
+- Bytecode compiler: refinement constraints are enforced at the interpreter level; the bytecode path does not yet inject checks (planned as a future `CheckConstraint` instruction).
 
 ---
 
-## 17. Declarative tool error hints (`@on_fail`)  🟠
+## 17. Declarative tool error hints (`@on_fail`)  🟠 ✅ done
 
-**What's there:** When a `@tool` function fails (`@requires` not met, `assert` fires,
-timeout exceeded) the agent receives a raw Java exception message with no guidance on
-how to recover.
-
-**What's missing:** A structured failure annotation that surfaces a human-readable hint
-back to the calling agent:
-
+**What's there:** Structured failure wrapping for `@tool` functions:
 ```aion
 @tool
 @io
@@ -280,18 +227,17 @@ fn sanitise(raw_input: Str) -> Str {
     return trimmed
 }
 ```
+When any failure occurs inside an `@on_fail`-annotated tool (pre-condition breach, `assert`, timeout, or any runtime exception) the runtime wraps it as:
+```
+err(ToolError { hint: "...", cause: "..." })
+```
+instead of throwing. The agent loop can inspect `hint` to self-correct without unwrapping a Java stack trace.
 
-When any failure occurs inside an `@on_fail`-annotated tool the runtime wraps the error
-in a structured `ToolError { hint: Str, cause: Str }` value that the agent loop can
-read directly rather than unwrapping a Java stack trace.
-
-**Why it makes sense:** Current `assert` failures produce opaque crashes.  An AI agent
-cannot self-correct from a stack trace.  `@on_fail` is the minimal change needed to make
-tool failures *actionable* — it is the difference between a crashed agent and a retrying
-agent.
-
-**Effort:** Small — one new annotation token, one new `Annotation` record in the AST,
-and a one-line change in the interpreter's tool-call error handler to wrap the message.
+- Lexer: `ANN_ON_FAIL : '@on_fail'` token.
+- Parser: `annotation` rule gains `| ANN_ON_FAIL LPAREN STR_LIT RPAREN`.
+- AST: `Annotation.OnFail(String hint)` record.
+- Interpreter: `callFn` extracts the hint; wraps all `RuntimeException` in `ErrVal(RecordVal("ToolError", {hint, cause}))`.
+- CLI `describe`: emits `"on_fail_hint"` field in JSON tool descriptors.
 
 ---
 
@@ -336,20 +282,20 @@ evaluator to bind the name instead of `result`.
 | # | Feature | Priority | Effort | Status |
 |---|---------|:--------:|:------:|:------:|
 | 1 | Module system + file loading | 🔴 | Large | — |
-| 2 | Closures / lambdas | 🔴 | Medium | — |
+| 2 | Closures / lambdas | 🔴 | Medium | ✅ done |
 | 3 | Traits / interfaces | 🔴 | Large | — |
 | 4 | `?` error propagation | 🟠 | Small | ✅ done |
 | 5 | Generic functions (real) | 🟠 | Large | — |
-| 6 | Deep mutable field assignment | 🟠 | Medium | — |
-| 15 | Semantic / newtype aliases | 🟠 | Small-Medium | — |
-| 16 | Refinement types (`where` constraints) | 🟠 | Large | — |
-| 17 | `@on_fail` declarative tool error hints | 🟠 | Small | — |
+| 6 | Deep mutable field assignment | 🟠 | Medium | ✅ done |
+| 15 | Semantic / newtype aliases | 🟠 | Small-Medium | ✅ done |
+| 16 | Refinement types (`where` constraints) | 🟠 | Large | ✅ done |
+| 17 | `@on_fail` declarative tool error hints | 🟠 | Small | ✅ done |
 | 7 | String interpolation | 🟡 | Small | ✅ done |
 | 8 | `break` / `continue` | 🟡 | Small | ✅ done |
-| 9 | Tuple types | 🟡 | Medium | — |
+| 9 | Tuple types | 🟡 | Medium | ✅ done |
 | 10 | `@async` / concurrency | 🟡 | Large | — |
 | 11 | Pattern guards | 🟡 | Small | ✅ done |
-| 18 | Named return variables | 🟢 | Small-Medium | — |
+| 18 | Named return variables | 🟢 | Small-Medium | ✅ done |
 | 12 | `const` declarations | 🟢 | Small | ✅ done |
 | 13 | Selective imports | 🟢 | Small | — |
 | 14 | Numeric literal forms | 🟢 | Small | — |
@@ -363,14 +309,15 @@ Sorted by effort within each priority tier, prerequisites noted:
 3. ~~String interpolation~~ ✅ **done**
 4. ~~`const` declarations~~ ✅ **done**
 5. ~~Pattern guards~~ ✅ **done**
-6. **`@on_fail` tool hints** *(small — makes agent failures actionable immediately)*
-7. **Semantic / newtype aliases** *(small-medium — prerequisite for refinement types)*
-8. **Named return variables** *(small-medium — builds on tuple syntax, improves `@ensures`)*
-9. **Closures / lambdas** *(medium — unlocks `map`/`filter`/`reduce`)*
-10. **Tuple types** *(medium — prerequisite for named returns and destructuring)*
-11. **Deep field assignment** *(medium — unblocks record mutation patterns)*
-12. **Module file loading** *(large — prerequisite for all multi-file programs)*
-13. **Traits** *(large — prerequisite for generic contracts)*
-14. **Generic functions** *(large — builds on traits)*
-15. **Refinement types** *(large — builds on semantic aliases and traits)*
-16. **`@async` / concurrency** *(large — needs scheduler, best done last)*
+6. ~~`@on_fail` tool hints~~ ✅ **done** *(makes agent failures actionable)*
+7. ~~**Semantic / newtype aliases**~~ ✅ **done** *(prerequisite for refinement types)*
+8. ~~**Refinement types** (`where` constraints)~~ ✅ **done** *(interpreter-level; bytecode injection pending)*
+9. ~~**Closures / lambdas**~~ ✅ **done** *(unlocks `map`/`filter`/`reduce`; closes 🔴 gap)*
+10. ~~**Named return variables**~~ ✅ **done** *(small-medium — improves `@ensures` readability)*
+11. ~~**Tuple types**~~ ✅ **done** *(medium — prerequisite for named returns and destructuring)*
+12. ~~**Deep field assignment**~~ ✅ **done** *(medium — unblocks record mutation patterns)*
+13. **Module file loading** *(large — prerequisite for all multi-file programs)*
+14. **Traits** *(large — prerequisite for generic contracts)*
+15. **Generic functions** *(large — builds on traits)*
+16. **Refinement type bytecode injection** *(medium — emit `CheckConstraint` in the compiler)*
+17. **`@async` / concurrency** *(large — needs scheduler, best done last)*

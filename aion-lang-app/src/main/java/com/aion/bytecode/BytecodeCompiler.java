@@ -21,6 +21,8 @@ public class BytecodeCompiler {
     private final Map<String, FnDecl>        fnDecls      = new HashMap<>();
     private final Map<String, Integer>       fnAddrs      = new HashMap<>();
     private final Map<String, List<Integer>> forwardCalls = new HashMap<>();
+    /** Counter used to generate unique names for lambda functions. */
+    private int lambdaCounter = 0;
 
     // ── Public API ────────────────────────────────────────────────────────────
 
@@ -38,7 +40,8 @@ public class BytecodeCompiler {
 
         int mainJumpIdx = emitPlaceholder(new Instruction.Jump(0));
 
-        for (FnDecl fn : fnDecls.values())
+        // Take a snapshot: compileFnDecl may add lambda synthetic functions to fnDecls
+        for (FnDecl fn : List.copyOf(fnDecls.values()))
             if (!fn.name().equals("main")) compileFnDecl(fn);
 
         patch(mainJumpIdx, new Instruction.Jump(out.size()));
@@ -115,8 +118,18 @@ public class BytecodeCompiler {
     private void compileAssign(Stmt.Assign asgn) {
         switch (asgn.target()) {
             case AssignTarget.Field f -> {
-                compileExpr(asgn.value());
-                emit(new Instruction.Store(f.path().getFirst()));
+                if (f.path().size() == 1) {
+                    compileExpr(asgn.value());
+                    emit(new Instruction.Store(f.path().getFirst()));
+                } else {
+                    // Deep path: load root, traverse intermediate fields, then SetField on the last
+                    emit(new Instruction.Load(f.path().getFirst()));
+                    for (int i = 1; i < f.path().size() - 1; i++) {
+                        emit(new Instruction.GetField(f.path().get(i)));
+                    }
+                    compileExpr(asgn.value());
+                    emit(new Instruction.SetField(f.path().getLast()));
+                }
             }
             case AssignTarget.Index ix -> {
                 emit(new Instruction.Load(ix.name()));
@@ -284,6 +297,10 @@ public class BytecodeCompiler {
                 for (MapEntry me : e.entries()) { compileExpr(me.key()); compileExpr(me.value()); }
                 emit(new Instruction.PushMap(e.entries().size()));
             }
+            case TupleLit e -> {
+                for (Expr el : e.elements()) compileExpr(el);
+                emit(new Instruction.PushTuple(e.elements().size()));
+            }
             case FieldAccess e -> { compileExpr(e.receiver()); emit(new Instruction.GetField(e.field())); }
             case IndexAccess e -> { compileExpr(e.receiver()); compileExpr(e.index()); emit(new Instruction.GetIndex()); }
 
@@ -302,6 +319,7 @@ public class BytecodeCompiler {
             case TrustedExpr   e -> compileExpr(e.inner());
             case UntrustedExpr e -> compileExpr(e.inner());
             case InterpolatedStr e -> compileInterpStr(e);
+            case Lambda e -> compileLambda(e);
         }
     }
 
@@ -348,14 +366,20 @@ public class BytecodeCompiler {
         compileExpr(e.left());
         if (!(e.right() instanceof VarRef ref))
             throw new UnsupportedOperationException("Pipe RHS must be a function reference.");
+        // Check if it's a known top-level function first
         FnDecl fn = fnDecls.get(ref.name());
-        if (fn == null) throw new UnsupportedOperationException("Pipe target not found: " + ref.name());
-        List<String> params = fn.params().stream().map(Param::name).toList();
-        Integer addr = fnAddrs.get(ref.name());
-        if (addr != null) emit(new Instruction.Call(addr, 1, params));
-        else {
-            int idx = emitPlaceholder(new Instruction.Call(0, 1, params));
-            forwardCalls.computeIfAbsent(ref.name(), k -> new ArrayList<>()).add(idx);
+        if (fn != null) {
+            List<String> params = fn.params().stream().map(Param::name).toList();
+            Integer addr = fnAddrs.get(ref.name());
+            if (addr != null) emit(new Instruction.Call(addr, 1, params));
+            else {
+                int idx = emitPlaceholder(new Instruction.Call(0, 1, params));
+                forwardCalls.computeIfAbsent(ref.name(), k -> new ArrayList<>()).add(idx);
+            }
+        } else {
+            // Assume it's a lambda in a local variable — load it and call dynamically
+            emit(new Instruction.Load(ref.name()));
+            emit(new Instruction.CallLambda(1));
         }
     }
 
@@ -523,6 +547,17 @@ public class BytecodeCompiler {
                     compileBindingPattern(fp.pattern(), fails);
                 }
             }
+            case Node.Pattern.TuplePat p -> {
+                // Check it's a tuple with the right arity
+                fails.add(emitPlaceholder(new Instruction.MatchTuple(p.elements().size(), 0)));
+                // Dup the tuple, then for each element: Dup tuple + GetField("0".."n") + bind
+                for (int i = 0; i < p.elements().size(); i++) {
+                    emit(new Instruction.Dup());
+                    emit(new Instruction.PushInt(i));
+                    emit(new Instruction.GetIndex()); // pushes elements[i]
+                    compileBindingPattern(p.elements().get(i), fails);
+                }
+            }
         }
     }
 
@@ -551,6 +586,7 @@ public class BytecodeCompiler {
             case Instruction.MatchBool   p -> new Instruction.MatchBool(p.value(), target);
             case Instruction.MatchNone   p -> new Instruction.MatchNone(target);
             case Instruction.MatchTag    p -> new Instruction.MatchTag(p.typeName(), p.variant(), target);
+            case Instruction.MatchTuple  p -> new Instruction.MatchTuple(p.arity(), target);
             default -> instr;
         };
     }
@@ -596,7 +632,14 @@ public class BytecodeCompiler {
             case "none"  -> emit(new Instruction.PushNone());
             default -> {
                 FnDecl fn = fnDecls.get(call.name());
-                if (fn == null) throw new UnsupportedOperationException("Unknown function: " + call.name());
+                if (fn == null) {
+                    // Not a declared function — treat as a local variable holding a lambda value.
+                    // Emit: Load(name), arg0, arg1, …, CallLambda(arity)
+                    emit(new Instruction.Load(call.name()));
+                    for (Node.Arg arg : call.args()) compileExpr(argVal(arg));
+                    emit(new Instruction.CallLambda(call.args().size()));
+                    return;
+                }
 
                 for (Node.Arg arg : call.args()) compileExpr(argVal(arg));
 
@@ -628,6 +671,39 @@ public class BytecodeCompiler {
         }
     }
 
+    /**
+     * Compile a lambda expression.
+     * The lambda body is emitted as a named anonymous function (e.g. {@code __lambda_0__})
+     * in the function table. A {@link Instruction.Load} of that synthetic name is emitted
+     * at the call site so the lambda can be passed as a value.
+     *
+     * <p>In the bytecode VM, function references are currently represented as their entry-
+     * point address stored in a special {@link com.aion.bytecode.VmValue.LambdaVal} wrapper
+     * pushed by a new {@link Instruction.PushLambda} instruction.
+     */
+    private void compileLambda(Lambda e) {
+        String name = "__lambda_" + (lambdaCounter++) + "__";
+        List<String> params = e.params().stream().map(Param::name).toList();
+        FnDecl synth = new FnDecl(
+                List.of(), name, List.of(), e.params(), e.returnType(), null, e.body(), e.pos());
+        fnDecls.put(name, synth);
+
+        // Jump past the lambda body (it will be emitted inline here)
+        int skipJump = emitPlaceholder(new Instruction.Jump(0));
+        int lambdaAddr = out.size();
+        fnAddrs.put(name, lambdaAddr);
+        patchForwardCalls(name);
+        int bodyStart = out.size();
+        compileBlock(synth.body());
+        int epilogueIdx = out.size();
+        emit(new Instruction.Return(false));
+        patchPropagates(bodyStart, epilogueIdx);
+        patch(skipJump, new Instruction.Jump(out.size()));
+
+        // Push a lambda value (entry address + param names) onto the stack
+        emit(new Instruction.PushLambda(lambdaAddr, params));
+    }
+
     // ── Forward-call patching ─────────────────────────────────────────────────
 
     private void patchForwardCalls(String fnName) {
@@ -646,7 +722,8 @@ public class BytecodeCompiler {
         if (e instanceof FnCall call) {
             if (call.name().equals("print")) return false;
             FnDecl fn = fnDecls.get(call.name());
-            if (fn == null) return false;
+            // Unknown name → local lambda variable; lambda calls always produce a value.
+            if (fn == null) return true;
             return !(fn.returnType() instanceof Node.TypeRef.UnitT);
         }
         return true;

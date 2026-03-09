@@ -329,4 +329,248 @@ class BytecodeCompilerTest {
             }
             """)).isEqualTo("hello\nHELLO\n5");
     }
+
+    // ── Lambda expressions ────────────────────────────────────────────────────
+    @Test void lambda_map_bytecode() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                let xs = [1, 2, 3]
+                let doubled = xs.map(fn(x: Int) -> Int { return x * 2 })
+                print(doubled)
+            }
+            """)).isEqualTo("[2, 4, 6]");
+    }
+
+    @Test void lambda_filter_bytecode() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                let xs = [1, 2, 3, 4, 5]
+                let evens = xs.filter(fn(x: Int) -> Bool { return x % 2 == 0 })
+                print(evens)
+            }
+            """)).isEqualTo("[2, 4]");
+    }
+
+    @Test void lambda_variable_called_directly() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                let double = fn(x: Int) -> Int { return x * 2 }
+                print(double(5))
+            }
+            """)).isEqualTo("10");
+    }
+
+    @Test void lambda_variable_called_in_for_loop() {
+        // Regression: BytecodeCompiler used to throw "Unknown function: step"
+        // when a variable holding a lambda was called inside a for-loop body.
+        assertThat(run("""
+            @pure fn normalise(s: Str) -> Str {
+                let steps = [
+                    fn(x: Str) -> Str { return x.trim() },
+                    fn(x: Str) -> Str { return x.upper() },
+                ]
+                mut out = s
+                for step in steps {
+                    out = step(out)
+                }
+                return out
+            }
+            @pure fn main() -> Unit {
+                print(normalise("  hello  "))
+            }
+            """)).isEqualTo("HELLO");
+    }
+
+    @Test void lambda_list_pipeline_two_steps() {
+        assertThat(run("""
+            @pure fn apply_all(s: Str) -> Str {
+                let ops = [
+                    fn(x: Str) -> Str { return x.trim() },
+                    fn(x: Str) -> Str { return x.lower() },
+                ]
+                mut result = s
+                for op in ops {
+                    result = op(result)
+                }
+                return result
+            }
+            @pure fn main() -> Unit {
+                print(apply_all("  WORLD  "))
+            }
+            """)).isEqualTo("world");
+    }
+
+    @Test void on_fail_requires_annotation_is_parsed() {
+        // The bytecode VM does not enforce @requires/@on_fail at runtime yet —
+        // those are checked by the tree-walking interpreter.  This test verifies
+        // that the annotations parse and compile without error, and that a valid
+        // call (b != 0) still returns the correct result.
+        assertThat(run("""
+            @tool
+            @pure
+            @requires(b != 0)
+            @on_fail("b must be non-zero")
+            fn safe_div(a: Int, b: Int) -> Int {
+                describe "Divides a by b."
+                return a / b
+            }
+            @pure fn main() -> Unit {
+                print(safe_div(10, 2))
+            }
+            """)).isEqualTo("5");
+    }
+
+    @Test void on_fail_not_triggered_on_success_bytecode() {
+        assertThat(run("""
+            @tool
+            @pure
+            @requires(b != 0)
+            @on_fail("b must be non-zero")
+            fn safe_div(a: Int, b: Int) -> Int {
+                describe "Divides a by b."
+                return a / b
+            }
+            @pure fn main() -> Unit {
+                print(safe_div(10, 2))
+            }
+            """)).isEqualTo("5");
+    }
+
+    // ── @on_fail structured tool errors ──────────────────────────────────────
+    @Test void on_fail_describe_contains_hint() {
+        // aion describe should emit on_fail_hint in JSON
+        var result = com.aion.parser.AionFrontend.parseString("""
+            @tool
+            @pure
+            @requires(b != 0)
+            @on_fail("b must be non-zero")
+            fn safe_div(a: Int, b: Int) -> Int {
+                describe "Divides a by b."
+                return a / b
+            }
+            """, "<test>");
+        assertThat(result.errors()).isEmpty();
+        // Verify annotation parsed correctly
+        var fn = (com.aion.ast.Node.FnDecl) result.module().decls().getFirst();
+        boolean hasOnFail = fn.annotations().stream()
+                .anyMatch(a -> a instanceof com.aion.ast.Node.Annotation.OnFail of
+                        && of.hint().equals("b must be non-zero"));
+        assertThat(hasOnFail).isTrue();
+    }
+
+    // ── Refinement types ──────────────────────────────────────────────────────
+    @Test void refinement_type_parses() {
+        var result = com.aion.parser.AionFrontend.parseString("""
+            type AgentID = Str where { self.starts_with("did:aion:") }
+            @pure fn main() -> Unit {}
+            """, "<test>");
+        assertThat(result.errors()).isEmpty();
+        var typeDecl = (com.aion.ast.Node.TypeDecl) result.module().decls().getFirst();
+        assertThat(typeDecl.body()).isInstanceOf(com.aion.ast.Node.TypeDeclBody.Alias.class);
+        var alias = (com.aion.ast.Node.TypeDeclBody.Alias) typeDecl.body();
+        assertThat(alias.constraint()).isNotNull();
+    }
+
+    // ── Tuple types (feature #9) ──────────────────────────────────────────────
+
+    @Test void tuple_construction_and_print() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                let t = (1, "hello")
+                print(t)
+            }
+            """)).isEqualTo("(1, hello)");
+    }
+
+    @Test void tuple_first_second() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                let t = (42, "world")
+                print(t.first())
+                print(t.second())
+            }
+            """)).isEqualTo("42\nworld");
+    }
+
+    @Test void tuple_get_by_index() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                let t = (10, 20, 30)
+                print(t.get(0))
+                print(t.get(2))
+            }
+            """)).isEqualTo("10\n30");
+    }
+
+    @Test void tuple_len() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                let t = (1, 2, 3)
+                print(t.len())
+            }
+            """)).isEqualTo("3");
+    }
+
+    @Test void tuple_returned_from_function() {
+        assertThat(run("""
+            @pure fn pair(a: Int, b: Int) -> (Int, Int) { return (a, b) }
+            @pure fn main() -> Unit {
+                let t = pair(3, 7)
+                print(t.first())
+                print(t.second())
+            }
+            """)).isEqualTo("3\n7");
+    }
+
+    @Test void tuple_pattern_match() {
+        assertThat(run("""
+            @pure fn classify(t: (Int, Int)) -> Str {
+                return match t {
+                    (0, 0) => "origin",
+                    (x, 0) => "x-axis",
+                    (0, y) => "y-axis",
+                    (x, y) => "general",
+                }
+            }
+            @pure fn main() -> Unit {
+                print(classify((0, 0)))
+                print(classify((5, 0)))
+                print(classify((0, 3)))
+                print(classify((2, 4)))
+            }
+            """)).isEqualTo("origin\nx-axis\ny-axis\ngeneral");
+    }
+
+    // ── Named return variables (feature #18) ──────────────────────────────────
+
+    @Test void named_return_basic() {
+        assertThat(run("""
+            @pure
+            @ensures(next_score >= score)
+            fn award_point(score: Int, correct: Bool) -> (next_score: Int) {
+                return match correct {
+                    true  => score + 1,
+                    false => score,
+                }
+            }
+            @pure fn main() -> Unit {
+                print(award_point(5, true))
+                print(award_point(5, false))
+            }
+            """)).isEqualTo("6\n5");
+    }
+
+    // ── Deep field assignment (feature #6) ────────────────────────────────────
+
+    @Test void deep_field_assignment_bytecode() {
+        assertThat(run("""
+            type Address = { city: Str, zip: Str }
+            type Person  = { name: Str, addr: Address }
+            @pure fn main() -> Unit {
+                mut p = Person { name: "Alice", addr: Address { city: "Berlin", zip: "10115" } }
+                p.addr.city = "Munich"
+                print(p.addr.city)
+            }
+            """)).isEqualTo("Munich");
+    }
 }

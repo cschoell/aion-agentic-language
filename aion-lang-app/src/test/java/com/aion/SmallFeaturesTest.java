@@ -310,5 +310,140 @@ class SmallFeaturesTest {
         assertThat(out.get(1)).isEqualTo("3: excellent");
         assertThat(out.get(2)).isEqualTo("4: excellent");
     }
+
+    // ── Tuple types (feature #9) ──────────────────────────────────────────────
+
+    @Test void tuple_construction_and_print() {
+        var out = run("""
+            @pure fn main() -> Unit {
+                let t = (1, "hello")
+                print(t)
+            }
+            """);
+        assertThat(out).containsExactly("(1, hello)");
+    }
+
+    @Test void tuple_field_access_via_methods() {
+        var out = run("""
+            @pure fn main() -> Unit {
+                let t = (42, "world")
+                print(t.first())
+                print(t.second())
+            }
+            """);
+        assertThat(out).containsExactly("42", "world");
+    }
+
+    @Test void tuple_get_by_index() {
+        var out = run("""
+            @pure fn main() -> Unit {
+                let t = (10, 20, 30)
+                print(t.get(0))
+                print(t.get(2))
+            }
+            """);
+        assertThat(out).containsExactly("10", "30");
+    }
+
+    @Test void tuple_len() {
+        var out = run("""
+            @pure fn main() -> Unit {
+                let t = (1, 2, 3)
+                print(t.len())
+            }
+            """);
+        assertThat(out).containsExactly("3");
+    }
+
+    @Test void tuple_returned_from_function() {
+        var out = run("""
+            @pure fn min_max(a: Int, b: Int) -> (Int, Int) {
+                return (a, b)
+            }
+            @pure fn main() -> Unit {
+                let t = min_max(3, 7)
+                print(t.first())
+                print(t.second())
+            }
+            """);
+        assertThat(out).containsExactly("3", "7");
+    }
+
+    @Test void tuple_pattern_match_in_match() {
+        var out = run("""
+            @pure fn classify(t: (Int, Int)) -> Str {
+                return match t {
+                    (0, 0) => "origin",
+                    (x, 0) => "on x-axis",
+                    (0, y) => "on y-axis",
+                    (x, y) => "general",
+                }
+            }
+            @pure fn main() -> Unit {
+                print(classify((0, 0)))
+                print(classify((5, 0)))
+                print(classify((0, 3)))
+                print(classify((2, 4)))
+            }
+            """);
+        assertThat(out).containsExactly("origin", "on x-axis", "on y-axis", "general");
+    }
+
+    // ── Named return variables (feature #18) ──────────────────────────────────
+
+    @Test void named_return_binds_in_ensures() {
+        // @ensures uses the named return variable instead of magic "result"
+        var src = """
+            @pure
+            @ensures(next_score >= score)
+            fn award_point(score: Int, correct: Bool) -> (next_score: Int) {
+                return match correct {
+                    true  => score + 1,
+                    false => score,
+                }
+            }
+            @pure fn main() -> Unit {
+                print(award_point(5, true))
+                print(award_point(5, false))
+            }
+            """;
+        var out = run(src);
+        assertThat(out).containsExactly("6", "5");
+    }
+
+    @Test void named_return_result_also_bound() {
+        // "result" backward-compat name also works in @ensures
+        var src = """
+            @pure
+            @ensures(result >= 0)
+            fn abs_val(n: Int) -> (magnitude: Int) {
+                return match n {
+                    x if x < 0 => -x,
+                    x          => x,
+                }
+            }
+            @pure fn main() -> Unit {
+                print(abs_val(-7))
+                print(abs_val(3))
+            }
+            """;
+        var out = run(src);
+        assertThat(out).containsExactly("7", "3");
+    }
+
+    // ── Deep field assignment (feature #6) ────────────────────────────────────
+
+    @Test void deep_field_assignment_interpreter() {
+        var out = run("""
+            type Address = { city: Str, zip: Str }
+            type Person  = { name: Str, addr: Address }
+            @pure fn main() -> Unit {
+                mut p = Person { name: "Alice", addr: Address { city: "Berlin", zip: "10115" } }
+                p.addr.city = "Munich"
+                print(p.addr.city)
+            }
+            """);
+        assertThat(out).containsExactly("Munich");
+    }
 }
 

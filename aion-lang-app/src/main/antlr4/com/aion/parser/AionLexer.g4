@@ -40,6 +40,7 @@ UNTRUSTED   : 'untrusted' ;  // untrusted <expr> — mark value as untrusted
 CONST       : 'const' ;      // const NAME: Type = expr  (module-level constant)
 BREAK       : 'break' ;      // break  (exit innermost loop)
 CONTINUE    : 'continue' ;   // continue  (next iteration of innermost loop)
+WHERE       : 'where' ;      // where { self … }  — refinement constraint on a type alias
 
 // ── Effect annotations ────────────────────────────────────────────────────────
 ANN_PURE       : '@pure' ;
@@ -55,6 +56,7 @@ ANN_ENSURES    : '@ensures' ;                // @ensures(expr)    post-condition
 ANN_TIMEOUT    : '@timeout' ;                // @timeout(ms)      max execution time
 ANN_TRUSTED    : '@trusted' ;               // @trusted          all params treated as trusted
 ANN_UNTRUSTED  : '@untrusted' ;             // @untrusted        all params treated as untrusted
+ANN_ON_FAIL    : '@on_fail' ;               // @on_fail("hint")  structured error hint for agents
 
 // ── Built-in types ────────────────────────────────────────────────────────────
 T_INT       : 'Int' ;

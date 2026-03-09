@@ -123,6 +123,147 @@ class InterpreterQaTest {
                 "PERFECT");
     }
 
+    // ── input() must be called exactly once even when passed as an arg ──────
+
+    @Test
+    void input_called_once_when_passed_to_user_fn() {
+        // Regression: the old tryCallBuiltin path evaluated args speculatively
+        // before deciding whether the callee was a builtin, causing input() to
+        // consume an extra line from stdin. The second call would read "" and
+        // fail any @requires(raw != "") guard.
+        var out = run("""
+                @pure fn echo(s: Str) -> Str { return s }
+                @io fn main() -> Unit {
+                    let a = echo(input())
+                    print(a)
+                }
+                """, "hello\n");
+        assertThat(out).containsExactly("hello");
+    }
+
+    @Test
+    void input_called_once_per_question_across_three_questions() {
+        // Each call to sanitise(input()) must consume exactly one stdin line.
+        var out = run("""
+                @pure fn id(s: Str) -> Str { return s }
+                @io fn main() -> Unit {
+                    let a1 = id(input())
+                    let a2 = id(input())
+                    let a3 = id(input())
+                    print(a1)
+                    print(a2)
+                    print(a3)
+                }
+                """, "first\nsecond\nthird\n");
+        assertThat(out).containsExactly("first", "second", "third");
+    }
+
+    // ── @on_fail wraps @requires violations ──────────────────────────────────
+
+    @Test
+    void on_fail_wraps_requires_violation() {
+        var out = run("""
+                @tool
+                @pure
+                @requires(raw_input != "")
+                @on_fail("Input was empty.")
+                fn sanitise(raw_input: Str) -> Str {
+                    return raw_input.trim()
+                }
+                @io fn main() -> Unit {
+                    let r = sanitise("")
+                    match r {
+                        err(e) => print("caught"),
+                        ok(v)  => print("ok"),
+                    }
+                }
+                """, "");
+        assertThat(out).containsExactly("caught");
+    }
+
+    @Test
+    void on_fail_passes_through_on_success() {
+        var out = run("""
+                @tool
+                @pure
+                @requires(raw_input != "")
+                @on_fail("Input was empty.")
+                fn sanitise(raw_input: Str) -> Str {
+                    return raw_input.trim()
+                }
+                @io fn main() -> Unit {
+                    let r = sanitise("  hello  ")
+                    print(r)
+                }
+                """, "");
+        assertThat(out).containsExactly("hello");
+    }
+
+    // ── Lambda pipeline (list of lambdas called in a for-loop) ───────────────
+
+    @Test
+    void lambda_list_called_in_for_loop() {
+        var out = run("""
+                @pure fn normalise(answer: Str) -> Str {
+                    let steps = [
+                        fn(s: Str) -> Str { return s.trim() },
+                        fn(s: Str) -> Str { return s.lower() },
+                    ]
+                    mut out = answer
+                    for step in steps {
+                        out = step(out)
+                    }
+                    return out
+                }
+                @io fn main() -> Unit {
+                    print(normalise("  HELLO  "))
+                    print(normalise("Paris"))
+                    print(normalise("  42  "))
+                }
+                """, "");
+        assertThat(out).containsExactly("hello", "paris", "42");
+    }
+
+    // ── Combined: sanitise(input()) + normalise pipeline ──────────────────────
+
+    @Test
+    void sanitise_input_then_normalise_reads_stdin_once() {
+        // Full regression test for the agent-tools.aion pattern:
+        //   let a = sanitise(input())
+        //   if normalise(a) == "5" { ... }
+        // input() must be called exactly once; normalise must receive "5", not "".
+        var out = run("""
+                @tool
+                @pure
+                @requires(raw_input != "")
+                @on_fail("Input was empty.")
+                fn sanitise(raw_input: Str) -> Str {
+                    let trimmed = raw_input.trim()
+                    return trimmed
+                }
+                @pure fn normalise(answer: Str) -> Str {
+                    let steps = [
+                        fn(s: Str) -> Str { return s.trim() },
+                        fn(s: Str) -> Str { return s.lower() },
+                    ]
+                    mut out = answer
+                    for step in steps {
+                        out = step(out)
+                    }
+                    return out
+                }
+                @io fn main() -> Unit {
+                    let a1 = sanitise(input())
+                    if normalise(a1) == "5" {
+                        print("correct")
+                    } else {
+                        print("wrong: ${a1}")
+                    }
+                }
+                """, "5\n");
+        assertThat(out).containsExactly("correct");
+    }
+
     @Test
     void interpreter_qa_full_quiz_all_wrong() {
         String source = """

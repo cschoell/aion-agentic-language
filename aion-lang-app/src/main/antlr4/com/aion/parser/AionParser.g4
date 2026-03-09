@@ -1,4 +1,4 @@
-/**
+﻿﻿/**
  * Aion Language — Parser Grammar
  *
  * Every construct starts with a unique leading token so an AI can predict
@@ -46,8 +46,8 @@ modulePath
 
 // ── Type declarations ─────────────────────────────────────────────────────────
 typeDecl
-    : TYPE TYPE_IDENT typeParams? EQ recordBody   # RecordTypeDecl
-    | TYPE TYPE_IDENT typeParams? EQ typeRef       # AliasTypeDecl
+    : TYPE TYPE_IDENT typeParams? EQ recordBody                             # RecordTypeDecl
+    | TYPE TYPE_IDENT typeParams? EQ typeRef (WHERE LBRACE expr RBRACE)?    # AliasTypeDecl
     ;
 
 recordBody
@@ -86,7 +86,8 @@ param
     ;
 
 returnType
-    : typeRef
+    : typeRef                              # PlainReturn
+    | LPAREN IDENT COLON typeRef RPAREN    # NamedReturn
     ;
 
 annotation
@@ -103,6 +104,7 @@ annotation
     | ANN_TIMEOUT   LPAREN INT_LIT RPAREN
     | ANN_TRUSTED
     | ANN_UNTRUSTED
+    | ANN_ON_FAIL   LPAREN STR_LIT RPAREN
     ;
 
 // ── Statements ────────────────────────────────────────────────────────────────
@@ -259,6 +261,8 @@ primaryExpr
     | blockExpr                                          # BlockExprRef
     | listLit                                            # ListLitRef
     | mapLit                                             # MapLitRef
+    | FN LPAREN paramList? RPAREN ARROW typeRef block    # LambdaExpr
+    | tupleLit                                           # TupleLitRef
     | LPAREN expr RPAREN                                 # Parens
     ;
 
@@ -285,6 +289,11 @@ mapLit
 
 mapEntry
     : expr ARROW expr
+    ;
+
+// Tuple literal: always 2+ elements, e.g. (1, "hello") or (a, b, c)
+tupleLit
+    : LPAREN expr COMMA expr (COMMA expr)* RPAREN
     ;
 
 blockExpr
@@ -315,6 +324,7 @@ pattern
     | TYPE_IDENT DCOLON TYPE_IDENT LPAREN pattern (COMMA pattern)* RPAREN # EnumTuplePattern
     | TYPE_IDENT DCOLON TYPE_IDENT LBRACE fieldPattern (COMMA fieldPattern)* RBRACE # EnumRecordPattern
     | TYPE_IDENT LBRACE fieldPattern (COMMA fieldPattern)* RBRACE # RecordPattern
+    | LPAREN pattern COMMA pattern (COMMA pattern)* RPAREN         # TuplePattern
     | IDENT                                               # BindPattern
     ;
 
@@ -335,6 +345,7 @@ typeRef
     | T_LIST LBRACKET typeRef RBRACKET                         # ListType
     | T_MAP LBRACKET typeRef COMMA typeRef RBRACKET            # MapType
     | TYPE_IDENT (LBRACKET typeRef (COMMA typeRef)* RBRACKET)? # NamedType
+    | LPAREN typeRef COMMA typeRef (COMMA typeRef)* RPAREN     # TupleType
     | LPAREN typeRef (COMMA typeRef)* RPAREN ARROW typeRef     # FnType
     ;
 
