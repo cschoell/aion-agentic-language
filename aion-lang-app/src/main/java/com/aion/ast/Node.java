@@ -91,17 +91,22 @@ public interface Node {
     sealed interface Stmt permits
             Stmt.Block, Stmt.Let, Stmt.Mut, Stmt.Assign,
             Stmt.Return, Stmt.ExprStmt, Stmt.If, Stmt.While, Stmt.For,
-            Stmt.Assert, Stmt.Describe, Stmt.Break, Stmt.Continue {
+            Stmt.Assert, Stmt.Describe, Stmt.Break, Stmt.Continue,
+            Stmt.LetDestructure, Stmt.ForTupleDestructure {
 
         record Block(List<Stmt> stmts, Pos pos) implements Stmt {}
         record Let(String name, TypeRef type, Expr value, Pos pos) implements Stmt {}
         record Mut(String name, TypeRef type, Expr value, Pos pos) implements Stmt {}
+        /** Destructuring let: {@code let { a, b } = rec} or {@code let (a, b) = tuple}. */
+        record LetDestructure(List<String> names, boolean isTuple, Expr value, Pos pos) implements Stmt {}
         record Assign(AssignTarget target, Expr value, Pos pos)    implements Stmt {}
         record Return(Expr value, Pos pos)                         implements Stmt {}
         record ExprStmt(Expr expr, Pos pos)                        implements Stmt {}
         record If(List<IfBranch> branches, Stmt.Block elseBranch, Pos pos) implements Stmt {}
         record While(Expr condition, Stmt.Block body, Pos pos)     implements Stmt {}
         record For(String var, Expr iterable, Stmt.Block body, Pos pos) implements Stmt {}
+        /** Tuple destructuring for-loop: {@code for (a, b) in pairs { … }}. */
+        record ForTupleDestructure(List<String> vars, Expr iterable, Stmt.Block body, Pos pos) implements Stmt {}
         /** Runtime-checked assertion: assert <cond> [, <message>] */
         record Assert(Expr condition, Expr message, Pos pos)       implements Stmt {}
         /** Inline doc-string: describe "..." — appears in tool descriptors */

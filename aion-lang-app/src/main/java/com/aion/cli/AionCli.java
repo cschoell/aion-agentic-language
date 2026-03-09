@@ -17,7 +17,7 @@ import java.util.concurrent.Callable;
     mixinStandardHelpOptions = true,
     version     = "0.1.0",
     subcommands = { AionCli.Run.class, AionCli.Check.class, AionCli.Repl.class,
-                    AionCli.Compile.class, AionCli.Describe.class }
+                    AionCli.Compile.class, AionCli.Describe.class, AionCli.TestCmd.class }
 )
 public class AionCli implements Callable<Integer> {
 
@@ -160,6 +160,51 @@ public class AionCli implements Callable<Integer> {
             } catch (Exception e) {
                 System.err.println("Error: " + e);
                 e.printStackTrace(System.err);
+                return 1;
+            }
+        }
+    }
+
+    // ── aion test <file> ──────────────────────────────────────────────────────
+
+    @Command(name = "test", description = "Run all @test-annotated functions in an Aion source file")
+    static class TestCmd implements Callable<Integer> {
+
+        @Parameters(index = "0", description = "Source file (.aion)")
+        Path file;
+
+        @Override public Integer call() {
+            try {
+                var result = AionFrontend.parseFileWithImports(file);
+                if (result.hasErrors()) {
+                    result.errors().forEach(System.err::println);
+                    return 1;
+                }
+                Interpreter interp = new Interpreter();
+                interp.loadModule(result.module());
+
+                int passed = 0, failed = 0;
+                for (Node decl : result.module().decls()) {
+                    if (!(decl instanceof Node.FnDecl fn)) continue;
+                    boolean isTest = fn.annotations().stream()
+                            .anyMatch(a -> a instanceof Node.Annotation.Test);
+                    if (!isTest) continue;
+
+                    try {
+                        interp.callFunction(fn.name(), java.util.List.of());
+                        System.out.println("  PASS  " + fn.name());
+                        passed++;
+                    } catch (Exception e) {
+                        System.out.println("  FAIL  " + fn.name() + " — " + e.getMessage());
+                        failed++;
+                    }
+                }
+
+                System.out.println();
+                System.out.println("Results: " + passed + " passed, " + failed + " failed.");
+                return failed > 0 ? 1 : 0;
+            } catch (Exception e) {
+                System.err.println("Error: " + e.getMessage());
                 return 1;
             }
         }

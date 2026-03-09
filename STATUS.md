@@ -1,6 +1,6 @@
 # Status
 
-**Version:** 0.6.0-dev
+**Version:** 0.7.0-dev
 **State:** Proof-of-concept · Tree-walking interpreter + bytecode compiler/VM · Pre-type-checker
 
 ---
@@ -39,6 +39,8 @@
 - [x] **Range expressions** — `from..to` (exclusive) and `from..=to` (inclusive); evaluates to `List[Int]`; works in `for … in` and as a value
 - [x] **Import resolution** — `parseFileWithImports`: recursive file loading, transitive imports, cycle detection (`import math_utils` works end-to-end)
 - [x] **Selective imports** — `import foo { bar, baz }` syntax; filters to named declarations only; supports functions, consts, types, enums
+- [x] **Destructuring `let`** — `let { name, age } = user` (record) and `let (a, b) = pair` (tuple); both interpreter and bytecode VM
+- [x] **Tuple `for` destructuring** — `for (k, v) in pairs { … }` iterates a list of tuples binding each element
 
 ### Interpreter (tree-walking)
 - [x] Tree-walking interpreter (all constructs)
@@ -67,10 +69,11 @@
 - [x] `aion check` — parse/validate without running
 - [x] `aion repl` — interactive REPL with multi-line brace-depth tracking
 - [x] `aion compile` — compile and execute via the bytecode VM
+- [x] `aion test` — collect and run all `@test`-annotated functions; reports PASS/FAIL per function and a summary count
 - [x] Gradle build with ANTLR4 code generation (`generateAntlr` task)
-- [x] **174 passing unit tests** across 6 suites: `AionLanguageTest` (18), `BytecodeCompilerTest` (40), `InterpreterQaTest` (5), `SmallFeaturesTest` (30), `ModuleImportTest` (12), `ResourceScriptE2ETest` (60)
+- [x] **183 passing unit tests** across 6 suites: `AionLanguageTest` (18), `BytecodeCompilerTest` (49), `InterpreterQaTest` (5), `SmallFeaturesTest` (39), `ModuleImportTest` (12), `ResourceScriptE2ETest` (60)
 - [x] `sample.aion` — full demo program
-- [x] `bytecode-demo.aion` — bytecode-path demo with numeric literal forms and range expressions
+- [x] `bytecode-demo.aion` — bytecode-path demo with numeric literal forms, range expressions, and destructuring let
 - [x] `math_utils.aion` — shared utility module (abs, clamp, isqrt, sum, gcd, low_byte, is_power_of_two)
 - [x] `import-demo.aion` — multi-file import demo with all numeric literal forms and selective imports
 

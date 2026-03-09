@@ -166,7 +166,10 @@ class ResourceScriptE2ETest {
             "sum(1..5) = 15",
             "sum(1..=10) = 55",
             "digits 0..5 = [0, 1, 2, 3, 4]",
-            "even sum 0..10 = 20"
+            "even sum 0..10 = 20",
+            "Vec2 destructure: x=3, y=4",
+            "tuple destructure: cx=10, cy=20",
+            "pair_sum = 606"
     );
 
     @Test void bytecode_demo_interpreter() throws Exception {

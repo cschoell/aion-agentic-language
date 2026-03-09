@@ -145,7 +145,9 @@ continueStmt
     ;
 
 letStmt
-    : LET IDENT (COLON typeRef)? EQ expr
+    : LET IDENT (COLON typeRef)? EQ expr                                    # LetSimple
+    | LET LBRACE IDENT (COMMA IDENT)* RBRACE EQ expr                        # LetRecordDestructure
+    | LET LPAREN IDENT (COMMA IDENT)+ RPAREN EQ expr                        # LetTupleDestructure
     ;
 
 mutStmt
@@ -188,7 +190,8 @@ whileStmt
     ;
 
 forStmt
-    : FOR IDENT IN expr block
+    : FOR IDENT IN expr block                                               # ForSimple
+    | FOR LPAREN IDENT (COMMA IDENT)+ RPAREN IN expr block                  # ForTupleDestructure
     ;
 
 // ── Expressions (precedence encoded via rule hierarchy) ───────────────────────

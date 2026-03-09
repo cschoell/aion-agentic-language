@@ -698,4 +698,48 @@ class BytecodeCompilerTest {
             }
             """)).isEqualTo("[0, 1, 2, 3]");
     }
+
+    // ── Destructuring let ─────────────────────────────────────────────────────
+
+    @Test void bc_let_record_destructure() {
+        assertThat(run("""
+            type Point = { x: Int, y: Int }
+            @pure fn main() -> Unit {
+                let p = Point { x: 3, y: 7 }
+                let { x, y } = p
+                print(x + y)
+            }
+            """)).isEqualTo("10");
+    }
+
+    @Test void bc_let_tuple_destructure() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                let pair = (10, 20)
+                let (a, b) = pair
+                print(a + b)
+            }
+            """)).isEqualTo("30");
+    }
+
+    @Test void bc_let_tuple_destructure_three() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                let t = (1, 2, 3)
+                let (x, y, z) = t
+                print(x + y + z)
+            }
+            """)).isEqualTo("6");
+    }
+
+    @Test void bc_for_tuple_destructure() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                let pairs = [(1, 10), (2, 20), (3, 30)]
+                for (k, v) in pairs {
+                    print(k + v)
+                }
+            }
+            """)).isEqualTo("11\n22\n33");
+    }
 }

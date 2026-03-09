@@ -112,6 +112,12 @@ public class BytecodeCompiler {
             case Stmt.Describe ign -> {}
             case Stmt.Break    ign -> emit(new Instruction.Break());
             case Stmt.Continue ign -> emit(new Instruction.Continue());
+            case Stmt.LetDestructure s -> {
+                compileExpr(s.value());
+                if (s.isTuple()) emit(new Instruction.DestructureTuple(s.names()));
+                else             emit(new Instruction.DestructureRecord(s.names()));
+            }
+            case Stmt.ForTupleDestructure s -> compileForTupleDestructure(s);
         }
     }
 
@@ -245,6 +251,42 @@ public class BytecodeCompiler {
 
         // continue → jump back to loop start (before get)
         // break → jump past the None-Pop (stack is clean when breaking from body)
+        patchLoopJumps(bodyStart, loopEnd - 1, loopStart, afterPop);
+    }
+
+    private void compileForTupleDestructure(Stmt.ForTupleDestructure s) {
+        String iterVar = "__iter_" + out.size();
+        String idxVar  = "__idx_"  + out.size();
+
+        compileExpr(s.iterable());
+        emit(new Instruction.Store(iterVar));
+        emit(new Instruction.PushInt(0L));
+        emit(new Instruction.Store(idxVar));
+
+        int loopStart = out.size();
+        emit(new Instruction.Load(iterVar));
+        emit(new Instruction.Load(idxVar));
+        emit(new Instruction.CallMethod("get", 1));
+        int exitPatch = emitPlaceholder(new Instruction.JumpIfNone(0));
+
+        emit(new Instruction.UnwrapInner());
+        // TOS is the tuple item — destructure it into the named vars
+        emit(new Instruction.DestructureTuple(s.vars()));
+
+        emit(new Instruction.Load(idxVar));
+        emit(new Instruction.PushInt(1L));
+        emit(new Instruction.Add());
+        emit(new Instruction.Store(idxVar));
+
+        int bodyStart = out.size();
+        compileBlock(s.body());
+        emit(new Instruction.Jump(loopStart));
+
+        int loopEnd = out.size();
+        patch(exitPatch, new Instruction.JumpIfNone(loopEnd));
+        emit(new Instruction.Pop());
+
+        int afterPop = out.size();
         patchLoopJumps(bodyStart, loopEnd - 1, loopStart, afterPop);
     }
 

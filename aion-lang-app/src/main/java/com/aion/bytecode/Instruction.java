@@ -33,6 +33,7 @@ public sealed interface Instruction permits
         Instruction.Break, Instruction.Continue, Instruction.Stringify,
         Instruction.Throw,
         Instruction.MakeRange,
+        Instruction.DestructureRecord, Instruction.DestructureTuple,
         Instruction.Halt {
 
     // ── Literals ─────────────────────────────────────────────────────────────
@@ -192,4 +193,10 @@ public sealed interface Instruction permits
     // ── Range ─────────────────────────────────────────────────────────────────
     /** Pop to (TOS) and from (TOS-1); push a ListVal of integers [from..to). inclusive=true → [from..=to]. */
     record MakeRange(boolean inclusive) implements Instruction {}
+
+    // ── Destructuring ─────────────────────────────────────────────────────────
+    /** Pop a RecordVal from TOS; store each named field into the named variable. */
+    record DestructureRecord(java.util.List<String> names) implements Instruction {}
+    /** Pop a TupleVal (or ListVal) from TOS; store each element positionally into the named variables. */
+    record DestructureTuple(java.util.List<String> names) implements Instruction {}
 }

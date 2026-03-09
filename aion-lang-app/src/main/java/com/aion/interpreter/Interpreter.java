@@ -223,6 +223,8 @@ public final class Interpreter {
             case Stmt.Describe s -> { /* doc-string — no runtime effect */ }
             case Stmt.Break    s -> throw new BreakSignal();
             case Stmt.Continue s -> throw new ContinueSignal();
+            case Stmt.LetDestructure s -> execLetDestructure(s, env);
+            case Stmt.ForTupleDestructure s -> execForTupleDestructure(s, env);
         }
     }
 
@@ -273,6 +275,61 @@ public final class Interpreter {
                 return;
             } catch (ContinueSignal ignored) {
                 // continue to next iteration — re-evaluate condition
+            }
+        }
+    }
+
+    private void execLetDestructure(Stmt.LetDestructure s, Environment env) {
+        AionValue val = evalExpr(s.value(), env);
+        if (s.isTuple()) {
+            // let (a, b) = tuple
+            List<AionValue> elems = switch (val) {
+                case AionValue.TupleVal t -> t.elements();
+                case AionValue.ListVal  l -> l.elements();
+                default -> throw new AionRuntimeException("Cannot tuple-destructure " + val);
+            };
+            List<String> names = s.names();
+            if (names.size() != elems.size())
+                throw new AionRuntimeException(
+                    "Destructure arity mismatch: expected " + names.size() + " but got " + elems.size());
+            for (int i = 0; i < names.size(); i++) env.define(names.get(i), elems.get(i));
+        } else {
+            // let { a, b } = record
+            if (!(val instanceof AionValue.RecordVal r))
+                throw new AionRuntimeException("Cannot record-destructure " + val);
+            for (String name : s.names()) {
+                AionValue field = r.fields().get(name);
+                if (field == null)
+                    throw new AionRuntimeException("Record has no field '" + name + "'");
+                env.define(name, field);
+            }
+        }
+    }
+
+    private void execForTupleDestructure(Stmt.ForTupleDestructure s, Environment env) {
+        AionValue iter = evalExpr(s.iterable(), env);
+        List<AionValue> items = switch (iter) {
+            case AionValue.ListVal l -> l.elements();
+            case AionValue.TupleVal t -> t.elements();
+            default -> throw new AionRuntimeException("Cannot iterate over " + iter);
+        };
+        for (AionValue item : new ArrayList<>(items)) {
+            List<AionValue> elems = switch (item) {
+                case AionValue.TupleVal t -> t.elements();
+                case AionValue.ListVal  l -> l.elements();
+                default -> throw new AionRuntimeException("Cannot tuple-destructure loop item " + item);
+            };
+            if (elems.size() != s.vars().size())
+                throw new AionRuntimeException(
+                    "Loop destructure arity mismatch: expected " + s.vars().size() + " but got " + elems.size());
+            Environment loopEnv = env.child();
+            for (int i = 0; i < s.vars().size(); i++) loopEnv.define(s.vars().get(i), elems.get(i));
+            try {
+                execBlock(s.body(), loopEnv);
+            } catch (BreakSignal ignored) {
+                return;
+            } catch (ContinueSignal ignored) {
+                // continue to next item
             }
         }
     }

@@ -5,6 +5,50 @@ Versioning follows **date-based** releases while the project is pre-1.0.
 
 ---
 
+## [0.7.0] — 2026-03-09 · Destructuring let + aion test command
+
+### Language
+- **Destructuring `let`** — `let { name, age } = user` (record destructuring) and
+  `let (a, b) = pair` (tuple destructuring). Both interpreter and bytecode VM supported.
+- **Tuple `for` destructuring** — `for (k, v) in pairs { … }` iterates a list of tuples,
+  binding each element positionally per iteration.
+
+### Grammar / Parser
+- `AionParser.g4` — `letStmt` extended with `LetRecordDestructure` and `LetTupleDestructure`
+  alternatives; `forStmt` extended with `ForTupleDestructure` alternative.
+- `Node.Stmt.LetDestructure(List<String> names, boolean isTuple, Expr value, Pos pos)` — new AST node.
+- `Node.Stmt.ForTupleDestructure(List<String> vars, Expr iterable, Stmt.Block body, Pos pos)` — new AST node.
+- `AstBuilder` — `buildLetStmt` and `buildForStmt` dispatch on new context subclasses.
+
+### Interpreter
+- `execLetDestructure` — record path looks up each name in `RecordVal.fields()`; tuple path
+  checks arity and binds positionally from `TupleVal` or `ListVal`.
+- `execForTupleDestructure` — iterates a list, destructuring each item as a tuple per iteration.
+
+### Bytecode
+- `Instruction.DestructureRecord(List<String> names)` — pops `RecordVal`, stores each field.
+- `Instruction.DestructureTuple(List<String> names)` — pops `TupleVal`/`ListVal`, stores positionally.
+- `BytecodeCompiler` — emits `DestructureRecord`/`DestructureTuple` for `LetDestructure`;
+  new `compileForTupleDestructure` method for `ForTupleDestructure`.
+- `BytecodeVM` — executes both new instructions.
+
+### CLI
+- `aion test <file>` — new subcommand; collects all `@test`-annotated functions, runs each
+  via the interpreter, and reports `PASS`/`FAIL` per function plus a summary count.
+
+### Tests
+- 5 new interpreter tests in `SmallFeaturesTest` (record destructure, tuple destructure 2/3
+  elements, for-tuple-destructure, partial record destructure).
+- 4 new bytecode tests in `BytecodeCompilerTest`.
+- Total: **183 passing tests** across 6 suites.
+
+### Demo
+- `bytecode-demo.aion` — new destructuring section: `Vec2` record destructure, tuple
+  destructure, and `for (k, v2) in pairs` loop.
+- `ResourceScriptE2ETest` expected output updated with 3 new lines.
+
+---
+
 ## [0.6.0] — 2026-03-09 · Range expressions
 
 ### Language

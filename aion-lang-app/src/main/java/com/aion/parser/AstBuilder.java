@@ -217,8 +217,21 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
     }
 
     private Stmt buildLetStmt(AionParser.LetStmtContext ctx) {
-        TypeRef t = ctx.typeRef() != null ? convertTypeRef(ctx.typeRef()) : null;
-        return new Stmt.Let(ctx.IDENT().getText(), t, buildExpr(ctx.expr()), pos(ctx));
+        return switch (ctx) {
+            case AionParser.LetSimpleContext c -> {
+                TypeRef t = c.typeRef() != null ? convertTypeRef(c.typeRef()) : null;
+                yield new Stmt.Let(c.IDENT().getText(), t, buildExpr(c.expr()), pos(c));
+            }
+            case AionParser.LetRecordDestructureContext c -> {
+                List<String> names = c.IDENT().stream().map(n -> n.getText()).collect(java.util.stream.Collectors.toList());
+                yield new Stmt.LetDestructure(names, false, buildExpr(c.expr()), pos(c));
+            }
+            case AionParser.LetTupleDestructureContext c -> {
+                List<String> names = c.IDENT().stream().map(n -> n.getText()).collect(java.util.stream.Collectors.toList());
+                yield new Stmt.LetDestructure(names, true, buildExpr(c.expr()), pos(c));
+            }
+            default -> throw new AionParseException("Unknown letStmt context", pos(ctx));
+        };
     }
 
     private Stmt buildMutStmt(AionParser.MutStmtContext ctx) {
@@ -260,7 +273,15 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
     }
 
     private Stmt buildForStmt(AionParser.ForStmtContext ctx) {
-        return new Stmt.For(ctx.IDENT().getText(), buildExpr(ctx.expr()), buildBlock(ctx.block()), pos(ctx));
+        return switch (ctx) {
+            case AionParser.ForSimpleContext c ->
+                new Stmt.For(c.IDENT().getText(), buildExpr(c.expr()), buildBlock(c.block()), pos(c));
+            case AionParser.ForTupleDestructureContext c -> {
+                List<String> vars = c.IDENT().stream().map(n -> n.getText()).collect(java.util.stream.Collectors.toList());
+                yield new Stmt.ForTupleDestructure(vars, buildExpr(c.expr()), buildBlock(c.block()), pos(c));
+            }
+            default -> throw new AionParseException("Unknown forStmt context", pos(ctx));
+        };
     }
 
     // ── Expressions ───────────────────────────────────────────────────────────

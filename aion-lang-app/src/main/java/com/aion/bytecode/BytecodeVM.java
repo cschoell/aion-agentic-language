@@ -289,6 +289,32 @@ public class BytecodeVM {
                 stack.push(new ListVal(elems));
             }
 
+            // ── Destructuring ─────────────────────────────────────────────────
+            case Instruction.DestructureRecord dr -> {
+                Object val = stack.pop();
+                if (!(val instanceof RecordVal rv))
+                    throw new RuntimeException("Cannot record-destructure " + val);
+                for (String name : dr.names()) {
+                    Object field = rv.fields().get(name);
+                    if (field == null && !rv.fields().containsKey(name))
+                        throw new RuntimeException("Record has no field '" + name + "'");
+                    locals.put(name, field);
+                }
+            }
+            case Instruction.DestructureTuple dt -> {
+                Object val = stack.pop();
+                java.util.List<Object> elems = switch (val) {
+                    case TupleVal tv -> tv.elements();
+                    case ListVal  lv -> lv.elements();
+                    default -> throw new RuntimeException("Cannot tuple-destructure " + val);
+                };
+                java.util.List<String> names = dt.names();
+                if (names.size() != elems.size())
+                    throw new RuntimeException(
+                        "Destructure arity mismatch: expected " + names.size() + " but got " + elems.size());
+                for (int i = 0; i < names.size(); i++) locals.put(names.get(i), elems.get(i));
+            }
+
             // ── Meta ──────────────────────────────────────────────────────────
             case Instruction.Halt ignored -> { return total; }
         }

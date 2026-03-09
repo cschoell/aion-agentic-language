@@ -644,6 +644,67 @@ class SmallFeaturesTest {
         assertThat(out).containsExactly("55");
     }
 
+    // ── Destructuring let (feature) ───────────────────────────────────────────
+
+    @Test void let_record_destructure_interpreter() {
+        var out = run("""
+            type Point = { x: Int, y: Int }
+            @pure fn main() -> Unit {
+                let p = Point { x: 3, y: 7 }
+                let { x, y } = p
+                print(x + y)
+            }
+            """);
+        assertThat(out).containsExactly("10");
+    }
+
+    @Test void let_tuple_destructure_interpreter() {
+        var out = run("""
+            @pure fn main() -> Unit {
+                let pair = (10, 20)
+                let (a, b) = pair
+                print(a + b)
+            }
+            """);
+        assertThat(out).containsExactly("30");
+    }
+
+    @Test void let_tuple_destructure_three_elements() {
+        var out = run("""
+            @pure fn main() -> Unit {
+                let t = (1, 2, 3)
+                let (x, y, z) = t
+                print(x + y + z)
+            }
+            """);
+        assertThat(out).containsExactly("6");
+    }
+
+    @Test void for_tuple_destructure_interpreter() {
+        var out = run("""
+            @pure fn main() -> Unit {
+                let pairs = [(1, 10), (2, 20), (3, 30)]
+                for (k, v) in pairs {
+                    print(k + v)
+                }
+            }
+            """);
+        assertThat(out).containsExactly("11", "22", "33");
+    }
+
+    @Test void let_record_destructure_partial() {
+        var out = run("""
+            type User = { name: Str, age: Int, active: Bool }
+            @pure fn main() -> Unit {
+                let u = User { name: "Alice", age: 30, active: true }
+                let { name, age } = u
+                print(name)
+                print(age)
+            }
+            """);
+        assertThat(out).containsExactly("Alice", "30");
+    }
+
     // ── Deep field assignment (feature #6) ────────────────────────────────────
 
     @Test void deep_field_assignment_interpreter() {
