@@ -2,16 +2,42 @@
 //
 // Interactive 3-question quiz.
 //
-// New features used:
+// Features used here:
 //   const            — TOTAL questions defined once at the top
 //   string interp    — "Score: ${score} / ${TOTAL}" instead of + concatenation
 //   pattern guards   — match score { n if n == TOTAL => ... } for result message
 //   break            — clean loop exit when user types "quit"
 //   tuples            — score tracked as (correct, total) pair
 //   named return      — award_point uses -> (next_score: Int)
+//   numeric literals  — hex / binary / octal / underscore-separator consts
+//   ranges            — 1..=TOTAL to iterate question indices
+//   destructuring let — let { correct, attempts } = stats
+//   traits            — Scorable trait with grade() method
 
 const TOTAL: Int = 3
 const BORDER: Str = "+======================================+"
+
+// ── Numeric literal consts ─────────────────────────────────────────────────
+const PASS_MASK: Int  = 0b0000_0010   // bit-flag: score >= 2 passes
+const FULL_MARK: Int  = 0x03          // 3 — hex literal (quiz total)
+const SCALE: Int      = 1_000         // score scaled to per-mille
+
+// ── Types ──────────────────────────────────────────────────────────────────
+type QuizStats = { correct: Int, attempts: Int }
+
+// ── Trait: anything that can be graded ────────────────────────────────────
+trait Scorable {
+    fn grade(self: QuizStats) -> Str
+}
+
+impl Scorable for QuizStats {
+    @pure fn grade(self: QuizStats) -> Str {
+        if self.correct == TOTAL { return "A" }
+        if self.correct >= 2     { return "B" }
+        if self.correct >= 1     { return "C" }
+        return "F"
+    }
+}
 
 // Returns "correct" or "wrong: <expected>" based on the user's answer.
 @pure fn check(answer: Str, expected: Str) -> Str {
@@ -53,15 +79,18 @@ fn award_point(score: Int) -> (next_score: Int) {
 
     mut score = 0
     mut running = true
+    mut stats = QuizStats { correct: 0, attempts: 0 }
 
     // Q1 — arithmetic
     print("Q1: What is 2 + 2?")
     let a1 = input()
     if a1 == "quit" { running = false }
     if running {
+        stats.attempts = stats.attempts + 1
         let r1 = check(a1, "4")
         if r1 == "correct" {
             score = award_point(score)
+            stats.correct = stats.correct + 1
             print("  [CORRECT]")
         } else {
             print("  [WRONG]  The answer is 4.")
@@ -75,9 +104,11 @@ fn award_point(score: Int) -> (next_score: Int) {
         let a2 = input()
         if a2 == "quit" { running = false }
         if running {
+            stats.attempts = stats.attempts + 1
             let r2 = check(a2, "Paris")
             if r2 == "correct" {
                 score = award_point(score)
+                stats.correct = stats.correct + 1
                 print("  [CORRECT]")
             } else {
                 print("  [WRONG]  The answer is Paris.")
@@ -92,9 +123,11 @@ fn award_point(score: Int) -> (next_score: Int) {
         let a3 = input()
         if a3 == "quit" { running = false }
         if running {
+            stats.attempts = stats.attempts + 1
             let r3 = check(a3, "42")
             if r3 == "correct" {
                 score = award_point(score)
+                stats.correct = stats.correct + 1
                 print("  [CORRECT]")
             } else {
                 print("  [WRONG]  The answer is 42.")
@@ -108,4 +141,28 @@ fn award_point(score: Int) -> (next_score: Int) {
     print(BORDER)
     print("  ${verdict(s.first())}")
     print(BORDER)
+
+    // ── Feature showcase (non-interactive) ────────────────────────────────
+    print("")
+    print("── Feature showcase ──")
+
+    // Numeric literals
+    print("PASS_MASK=0b0000_0010 => ${PASS_MASK}")
+    print("FULL_MARK=0x03        => ${FULL_MARK}")
+    print("SCALE=1_000           => ${SCALE}")
+
+    // Range: sum question indices 1..=TOTAL
+    mut idx_sum = 0
+    for i in 1..=TOTAL {
+        idx_sum = idx_sum + i
+    }
+    print("sum(1..=TOTAL) = ${idx_sum}")
+
+    // Destructuring let on QuizStats record
+    let { correct, attempts } = stats
+    print("stats: correct=${correct}, attempts=${attempts}")
+
+    // Trait: grade via Scorable impl
+    let g = stats.grade()
+    print("grade = ${g}")
 }

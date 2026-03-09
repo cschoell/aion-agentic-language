@@ -41,6 +41,8 @@ CONST       : 'const' ;      // const NAME: Type = expr  (module-level constant)
 BREAK       : 'break' ;      // break  (exit innermost loop)
 CONTINUE    : 'continue' ;   // continue  (next iteration of innermost loop)
 WHERE       : 'where' ;      // where { self … }  — refinement constraint on a type alias
+TRAIT       : 'trait' ;      // trait Name { fn sig … }
+IMPL        : 'impl' ;       // impl TraitName for TypeName { fn … }
 
 // ── Effect annotations ────────────────────────────────────────────────────────
 ANN_PURE       : '@pure' ;

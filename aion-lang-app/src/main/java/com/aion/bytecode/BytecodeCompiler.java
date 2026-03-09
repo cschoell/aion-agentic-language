@@ -21,19 +21,34 @@ public class BytecodeCompiler {
     private final Map<String, FnDecl>        fnDecls      = new HashMap<>();
     private final Map<String, Integer>       fnAddrs      = new HashMap<>();
     private final Map<String, List<Integer>> forwardCalls = new HashMap<>();
+    /** Impl method names (TypeName::methodName) collected during compilation. */
+    private final java.util.Set<String>      implMethodNames = new java.util.LinkedHashSet<>();
     /** Counter used to generate unique names for lambda functions. */
     private int lambdaCounter = 0;
+    /** Refinement constraints keyed by type alias name. */
+    private final Map<String, Node.Expr> refinements = new HashMap<>();
 
     // ── Public API ────────────────────────────────────────────────────────────
 
     public Bytecode compile(Node node) {
-        out.clear(); fnDecls.clear(); fnAddrs.clear(); forwardCalls.clear();
+        out.clear(); fnDecls.clear(); fnAddrs.clear(); forwardCalls.clear(); implMethodNames.clear(); refinements.clear();
 
         if (!(node instanceof Node.Module m))
             throw new UnsupportedOperationException("Cannot compile: " + node.getClass().getSimpleName());
 
-        for (Node decl : m.decls())
+        for (Node decl : m.decls()) {
             if (decl instanceof FnDecl fn) fnDecls.put(fn.name(), fn);
+            else if (decl instanceof Node.TypeDecl td
+                    && td.body() instanceof Node.TypeDeclBody.Alias alias
+                    && alias.constraint() != null)
+                refinements.put(td.name(), alias.constraint());
+            else if (decl instanceof Node.ImplDecl impl)
+                for (Node.FnDecl mfn : impl.methods()) {
+                    String key = impl.typeName() + "::" + mfn.name();
+                    fnDecls.put(key, mfn);
+                    implMethodNames.add(key);
+                }
+        }
 
         if (!fnDecls.containsKey("main"))
             throw new IllegalStateException("No `main` function found.");
@@ -41,8 +56,8 @@ public class BytecodeCompiler {
         int mainJumpIdx = emitPlaceholder(new Instruction.Jump(0));
 
         // Take a snapshot: compileFnDecl may add lambda synthetic functions to fnDecls
-        for (FnDecl fn : List.copyOf(fnDecls.values()))
-            if (!fn.name().equals("main")) compileFnDecl(fn);
+        for (Map.Entry<String, FnDecl> entry : List.copyOf(new ArrayList<>(fnDecls.entrySet())))
+            if (!entry.getKey().equals("main")) compileFnDeclNamed(entry.getKey(), entry.getValue());
 
         patch(mainJumpIdx, new Instruction.Jump(out.size()));
 
@@ -58,15 +73,30 @@ public class BytecodeCompiler {
         if (!forwardCalls.isEmpty())
             throw new IllegalStateException("Unresolved forward calls: " + forwardCalls.keySet());
 
-        return new Bytecode(List.copyOf(out));
+        // Build impl method registry for the VM
+        Map<String, Bytecode.ImplMethodEntry> implMap = new HashMap<>();
+        for (String key : implMethodNames) {
+            Integer addr = fnAddrs.get(key);
+            if (addr != null) {
+                FnDecl fn = fnDecls.get(key);
+                List<String> params = fn.params().stream().map(Node.Param::name).toList();
+                implMap.put(key, new Bytecode.ImplMethodEntry(addr, params));
+            }
+        }
+        return new Bytecode(List.copyOf(out), Map.copyOf(implMap));
     }
 
     // ── Function compilation ──────────────────────────────────────────────────
 
     private void compileFnDecl(FnDecl fn) {
-        fnAddrs.put(fn.name(), out.size());
-        patchForwardCalls(fn.name());
+        compileFnDeclNamed(fn.name(), fn);
+    }
+
+    private void compileFnDeclNamed(String name, FnDecl fn) {
+        fnAddrs.put(name, out.size());
+        patchForwardCalls(name);
         int bodyStart = out.size();
+        emitParamConstraints(fn);
         compileBlock(fn.body());
         int epilogueIdx = out.size();
         emit(new Instruction.Return(false));
@@ -77,8 +107,42 @@ public class BytecodeCompiler {
         fnAddrs.put(fn.name(), out.size());
         patchForwardCalls(fn.name());
         int bodyStart = out.size();
+        emitParamConstraints(fn);
         compileBlock(fn.body());
         patchPropagates(bodyStart, out.size());
+    }
+
+    /** Emit CheckConstraint for each parameter whose type has a registered refinement. */
+    private void emitParamConstraints(FnDecl fn) {
+        for (Node.Param p : fn.params())
+            emitCheckConstraint(p.type(), p.name());
+    }
+
+    /**
+     * If {@code typeRef} names a refinement type, emit a {@link Instruction.CheckConstraint}
+     * that peeks the already-stored value (via Load) and validates the constraint.
+     * No-op when typeRef is null or has no registered constraint.
+     */
+    private void emitCheckConstraint(Node.TypeRef typeRef, String bindingName) {
+        if (!(typeRef instanceof Node.TypeRef.Named named)) return;
+        String typeName = named.name();
+        Node.Expr constraint = refinements.get(typeName);
+        if (constraint == null) return;
+        // Compile the constraint expression into a sub-list with a fresh compiler
+        // that shares the same refinements map but writes to a separate buffer.
+        List<Instruction> constraintCode = compileConstraintExpr(constraint);
+        emit(new Instruction.CheckConstraint(typeName, bindingName, constraintCode));
+    }
+
+    /**
+     * Compile a refinement constraint expression into a standalone instruction list.
+     * The resulting code expects {@code self} to be pre-loaded in the VM's locals.
+     */
+    private List<Instruction> compileConstraintExpr(Node.Expr constraint) {
+        BytecodeCompiler sub = new BytecodeCompiler();
+        sub.refinements.putAll(this.refinements);
+        sub.compileExpr(constraint);
+        return List.copyOf(sub.out);
     }
 
     /** Back-patch all unresolved {@code Propagate(-1)} in [from, end) to use epilogueIdx. */
@@ -90,14 +154,16 @@ public class BytecodeCompiler {
 
     // ── Statements ────────────────────────────────────────────────────────────
 
+    // ── Refinement helpers ────────────────────────────────────────────────────
+
     private void compileBlock(Stmt.Block block) {
         for (Stmt s : block.stmts()) compileStmt(s);
     }
 
     private void compileStmt(Stmt stmt) {
         switch (stmt) {
-            case Stmt.Let    let -> { compileExpr(let.value());  emit(new Instruction.Store(let.name())); }
-            case Stmt.Mut    mut -> { compileExpr(mut.value());  emit(new Instruction.Store(mut.name())); }
+            case Stmt.Let    let -> { compileExpr(let.value());  emit(new Instruction.Store(let.name()));  emitCheckConstraint(let.type(), let.name()); }
+            case Stmt.Mut    mut -> { compileExpr(mut.value());  emit(new Instruction.Store(mut.name()));  emitCheckConstraint(mut.type(), mut.name()); }
             case Stmt.Assign asgn -> compileAssign(asgn);
             case Stmt.ExprStmt es -> compileExprStmt(es.expr());
             case Stmt.If   s      -> compileIf(s);

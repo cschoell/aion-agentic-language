@@ -169,7 +169,11 @@ class ResourceScriptE2ETest {
             "even sum 0..10 = 20",
             "Vec2 destructure: x=3, y=4",
             "tuple destructure: cx=10, cy=20",
-            "pair_sum = 606"
+            "pair_sum = 606",
+            "Rect area   = 40",
+            "Circle area = 48",
+            "Score = 75",
+            "Tag = aion"
     );
 
     @Test void bytecode_demo_interpreter() throws Exception {
@@ -241,9 +245,20 @@ class ResourceScriptE2ETest {
             ""
     );
 
+    private static final List<String> QA_SHOWCASE = List.of(
+            "",
+            "── Feature showcase ──",
+            "PASS_MASK=0b0000_0010 => 2",
+            "FULL_MARK=0x03        => 3",
+            "SCALE=1_000           => 1000",
+            "sum(1..=TOTAL) = 6",
+            "stats: correct=3, attempts=3",
+            "grade = A"
+    );
+
     @Test void qa_demo_all_correct_interpreter() throws Exception {
         var out = runInterpreter(resource("qa-demo.aion"), "4\nParis\n42\n");
-        assertThat(out).isEqualTo(List.of(
+        var expected = new java.util.ArrayList<>(List.of(
                 QA_BORDER,
                 "|        Aion Quiz  --  3 Questions    |",
                 QA_BORDER,
@@ -263,11 +278,13 @@ class ResourceScriptE2ETest {
                 "  PERFECT SCORE! You got 3 / 3.",
                 QA_BORDER
         ));
+        expected.addAll(QA_SHOWCASE);
+        assertThat(out).isEqualTo(expected);
     }
 
     @Test void qa_demo_all_correct_bytecode() throws Exception {
         var out = runBytecode(resource("qa-demo.aion"), "4\nParis\n42\n");
-        assertThat(out).isEqualTo(List.of(
+        var expected = new java.util.ArrayList<>(List.of(
                 QA_BORDER,
                 "|        Aion Quiz  --  3 Questions    |",
                 QA_BORDER,
@@ -287,6 +304,8 @@ class ResourceScriptE2ETest {
                 "  PERFECT SCORE! You got 3 / 3.",
                 QA_BORDER
         ));
+        expected.addAll(QA_SHOWCASE);
+        assertThat(out).isEqualTo(expected);
     }
 
     @Test void qa_demo_mixed_answers_interpreter() throws Exception {
@@ -298,7 +317,8 @@ class ResourceScriptE2ETest {
                 "  [CORRECT]",
                 "  Good job! You got 2 / 3."
         );
-        assertThat(out.getLast()).isEqualTo(QA_BORDER);
+        assertThat(out).contains("── Feature showcase ──");
+        assertThat(out).anyMatch(l -> l.contains("grade = B"));
     }
 
     @Test void qa_demo_mixed_answers_bytecode() throws Exception {
@@ -309,7 +329,8 @@ class ResourceScriptE2ETest {
                 "  [CORRECT]",
                 "  Good job! You got 2 / 3."
         );
-        assertThat(out.getLast()).isEqualTo(QA_BORDER);
+        assertThat(out).contains("── Feature showcase ──");
+        assertThat(out).anyMatch(l -> l.contains("grade = B"));
     }
 
     @Test void qa_demo_quit_early_interpreter() throws Exception {
@@ -343,9 +364,20 @@ class ResourceScriptE2ETest {
 
     private static final String AGENT_BORDER = "+======================================+";
 
+    private static final List<String> AGENT_SHOWCASE = List.of(
+            "",
+            "── Feature showcase ──",
+            "MAX_SCORE=0x03       => 3",
+            "PASS_BITS=0b0000_0010 => 2",
+            "TIMEOUT_MS=1_000     => 1000",
+            "sum(1..=TOTAL) = 6",
+            "stats: attempts=3, correct=3",
+            "letter_grade = A"
+    );
+
     @Test void agent_tools_all_correct_interpreter() throws Exception {
         var out = runInterpreter(resource("agent-tools.aion"), "5\nParis\n42\n");
-        assertThat(out).isEqualTo(List.of(
+        var expected = new java.util.ArrayList<>(List.of(
                 AGENT_BORDER,
                 "|   Aion Agent-Safe Quiz  (mode: interp)|",
                 AGENT_BORDER,
@@ -365,11 +397,13 @@ class ResourceScriptE2ETest {
                 "  PERFECT SCORE!  You got 3 / 3.",
                 AGENT_BORDER
         ));
+        expected.addAll(AGENT_SHOWCASE);
+        assertThat(out).isEqualTo(expected);
     }
 
     @Test void agent_tools_all_correct_bytecode() throws Exception {
         var out = runBytecode(resource("agent-tools.aion"), "5\nParis\n42\n");
-        assertThat(out).isEqualTo(List.of(
+        var expected = new java.util.ArrayList<>(List.of(
                 AGENT_BORDER,
                 "|   Aion Agent-Safe Quiz  (mode: interp)|",
                 AGENT_BORDER,
@@ -389,18 +423,22 @@ class ResourceScriptE2ETest {
                 "  PERFECT SCORE!  You got 3 / 3.",
                 AGENT_BORDER
         ));
+        expected.addAll(AGENT_SHOWCASE);
+        assertThat(out).isEqualTo(expected);
     }
 
     @Test void agent_tools_all_wrong_interpreter() throws Exception {
         var out = runInterpreter(resource("agent-tools.aion"), "3\nLondon\n6\n");
         assertThat(out.stream().filter(l -> l.contains("[WRONG]")).count()).isEqualTo(3);
         assertThat(out).anyMatch(l -> l.contains("0 / 3"));
+        assertThat(out).anyMatch(l -> l.contains("letter_grade = F"));
     }
 
     @Test void agent_tools_all_wrong_bytecode() throws Exception {
         var out = runBytecode(resource("agent-tools.aion"), "3\nLondon\n6\n");
         assertThat(out.stream().filter(l -> l.contains("[WRONG]")).count()).isEqualTo(3);
         assertThat(out).anyMatch(l -> l.contains("0 / 3"));
+        assertThat(out).anyMatch(l -> l.contains("letter_grade = F"));
     }
 
     @Test void agent_tools_quit_early_interpreter() throws Exception {

@@ -8,7 +8,8 @@
 //   deep field assignment, semicolon statement separator,
 //   hex / binary / octal literals, underscore digit separators,
 //   range expressions (.. exclusive, ..= inclusive),
-//   destructuring let (record + tuple), for-tuple-destructure
+//   destructuring let (record + tuple), for-tuple-destructure,
+//   refinement types (CheckConstraint bytecode injection)
 
 const GREETING: Str = "Aion bytecode"
 const LIMIT: Int = 4
@@ -17,9 +18,48 @@ const FLAGS: Int    = 0b1010_1010   // 170  — binary literal with separator
 const UNIX_RWX: Int = 0o755         // 493  — octal literal
 const MILLION: Int  = 1_000_000     // underscore digit separator
 
+// ── Refinement types ─────────────────────────────────────────────────────────────────
+type Score = Int where { self >= 0 and self <= 100 }
+type Tag   = Str where { self.len() > 0 }
+
+// ── Traits ─────────────────────────────────────────────────────────────────
+trait HasArea {
+    fn area(self: Str) -> Int
+}
+
+trait Labeled {
+    fn label(self: Str) -> Str
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────
 type Counter = { label: Str, value: Int }
 type Vec2    = { x: Int, y: Int }
+type Rect    = { width: Int, height: Int }
+type Circle  = { radius: Int }
+
+impl HasArea for Rect {
+    @pure fn area(self: Rect) -> Int {
+        return self.width * self.height
+    }
+}
+
+impl HasArea for Circle {
+    @pure fn area(self: Circle) -> Int {
+        return 3 * self.radius * self.radius
+    }
+}
+
+impl Labeled for Rect {
+    @pure fn label(self: Rect) -> Str {
+        return "Rect"
+    }
+}
+
+impl Labeled for Circle {
+    @pure fn label(self: Circle) -> Str {
+        return "Circle"
+    }
+}
 
 // ── Pure functions ─────────────────────────────────────────────────────────
 @pure fn factorial(n: Int) -> Int {
@@ -173,4 +213,16 @@ fn abs_clamp(n: Int) -> (clamped: Int) {
     mut pair_sum = 0
     for (k, v2) in pairs { pair_sum = pair_sum + k + v2 }
     print("pair_sum = ${pair_sum}")
+
+    // -- traits: impl HasArea + Labeled for Rect and Circle --
+    let rect   = Rect { width: 8, height: 5 }
+    let circle = Circle { radius: 4 }
+    print("${rect.label()} area   = ${rect.area()}")
+    print("${circle.label()} area = ${circle.area()}")
+
+    // -- refinement types: CheckConstraint bytecode injection --
+    let s: Score = 75
+    print("Score = ${s}")
+    let t: Tag = "aion"
+    print("Tag = ${t}")
 }

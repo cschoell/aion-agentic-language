@@ -5,6 +5,66 @@ Versioning follows **date-based** releases while the project is pre-1.0.
 
 ---
 
+## [0.9.0] — 2026-03-09 · Refinement type bytecode injection
+
+### Bytecode
+- **`CheckConstraint` instruction** — new `Instruction.CheckConstraint(typeName, bindingName, constraintCode)`
+  carries a pre-compiled constraint expression as a sub-list of instructions.
+- **`BytecodeCompiler`** — collects `TypeDecl` alias constraints into a `refinements` map;
+  emits `CheckConstraint` after `Store` for `let`/`mut` bindings and function parameters
+  whose declared type has a registered refinement.
+- **`BytecodeVM`** — executes `CheckConstraint` via `runConstraint`: saves VM state, binds
+  `self` to the stored value, runs the constraint code, restores state, throws on failure.
+
+### Tests
+- 5 new bytecode tests in `BytecodeCompilerTest`: valid `let`, invalid `let` (throws),
+  valid param, invalid param (throws), string constraint (`starts_with`).
+- Total: **198 passing tests** across 7 suites.
+
+### Docs
+- `docs/missing-features.md` — refinement bytecode injection marked ✅ done.
+- `STATUS.md`, `README.md` — version bumped to `0.9.0-dev`, test count updated.
+
+---
+
+## [0.8.0] — 2026-03-09 · Trait / impl system
+
+### Language
+- **Trait declarations** — `trait Foo { fn method(self: Self) -> T }` defines an abstract
+  interface with one or more method signatures (no body).
+- **Impl blocks** — `impl Foo for MyType { fn method(self: MyType) -> T { … } }` provides
+  a concrete implementation for any record or enum type.
+- Method dispatch in both the interpreter and bytecode VM: `value.method()` first checks
+  impl methods before falling back to built-in dispatch.
+
+### Grammar / Parser
+- `AionLexer.g4` — new `TRAIT` and `IMPL` keywords.
+- `AionParser.g4` — new `traitDecl` (with `traitMember` abstract signatures) and `implDecl`
+  rules as `topDecl` alternatives.
+- `Node.TraitDecl` and `Node.ImplDecl` AST records.
+- `AstBuilder` — `visitTraitDecl` / `visitImplDecl`; `convertTraitMember` handles abstract sigs.
+
+### Interpreter
+- `implMethods` registry (`TypeName::methodName → FnDecl`); populated from `ImplDecl` in
+  `loadModule`; `evalMethodCall` falls back to impl lookup; `receiverTypeName` helper.
+
+### Bytecode
+- `Bytecode.implMethods` map (`ImplMethodEntry(address, params)`).
+- `BytecodeCompiler` — impl methods compiled as named functions (`TypeName::methodName`);
+  registry embedded in returned `Bytecode`.
+- `BytecodeVM` — `CallMethod` checks `implMethods` before built-in dispatch.
+
+### Tests
+- 10 new tests in `TraitTest`: basic trait call, self-field access, multiple methods,
+  two types same trait, extra params — all for both interpreter and bytecode.
+- Total: **193 passing tests** across 7 suites.
+
+### Demo
+- `bytecode-demo.aion`, `agent-tools.aion`, `qa-demo.aion` updated with trait/impl examples.
+- `ResourceScriptE2ETest` expected output updated.
+
+---
+
 ## [0.7.0] — 2026-03-09 · Destructuring let + aion test command
 
 ### Language
@@ -210,6 +270,20 @@ Versioning follows **date-based** releases while the project is pre-1.0.
   literal forms (hex, binary, octal, digit separator, mixed arithmetic).
 - 7 new tests in `ModuleImportTest` covering: function import, const import, transitive
   imports, and missing-module error — for both interpreter and bytecode backends.
+
+---
+
+## [0.8.0] 2026-03-09
+### Added
+- **Trait system** (`trait` + `impl … for …`) — structural, no inheritance:
+  - `trait` declares a set of function signatures (abstract members).
+  - `impl TraitName for TypeName { fn … }` provides concrete implementations.
+  - Method calls (`value.method()`) dispatch to impl methods when no built-in matches.
+  - Both interpreter and bytecode VM support trait dispatch.
+  - `self` is the first parameter of every impl method; extra parameters supported.
+  - Multiple types can implement the same trait; one type can have multiple impls.
+- **10 new tests** in `TraitTest.java` (5 interpreter + 5 bytecode); total 193 tests.
+- **Demo** — `bytecode-demo.aion` updated with `HasArea` + `Labeled` traits on `Rect` and `Circle`.
 
 ---
 

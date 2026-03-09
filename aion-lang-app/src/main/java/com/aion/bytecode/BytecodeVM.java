@@ -20,10 +20,12 @@ public class BytecodeVM {
     private Map<String, Object>  locals  = new HashMap<>();
     private final Scanner        scanner = new Scanner(System.in);
     private List<Instruction>    currentBytecode = List.of();
+    private Map<String, Bytecode.ImplMethodEntry> implMethods = Map.of();
 
     public void run(Bytecode bytecode) {
         frames.clear(); stack.clear(); locals = new HashMap<>();
         currentBytecode = bytecode.instructions;
+        implMethods = bytecode.implMethods;
         List<Instruction> instrs = bytecode.instructions;
         int ip = 0;
         while (ip < instrs.size()) ip = execute(instrs.get(ip), ip, instrs.size());
@@ -269,6 +271,18 @@ public class BytecodeVM {
                 Object[] args = new Object[cm.arity()];
                 for (int i = cm.arity() - 1; i >= 0; i--) args[i] = stack.pop();
                 Object receiver = stack.pop();
+                // Try built-in dispatch; fall back to impl methods
+                String implKey = receiverTypeName(receiver) + "::" + cm.method();
+                Bytecode.ImplMethodEntry entry = implMethods.get(implKey);
+                if (entry != null) {
+                    // Call impl method: self is first param, then remaining args
+                    frames.push(new Frame(ip + 1, locals));
+                    locals = new HashMap<>();
+                    locals.put(entry.params().get(0), receiver);
+                    for (int i = 0; i < args.length && i + 1 < entry.params().size(); i++)
+                        locals.put(entry.params().get(i + 1), args[i]);
+                    return entry.address();
+                }
                 Object result = dispatchMethod(receiver, cm.method(), args);
                 if (result != null || cm.method().equals("get")) stack.push(result);
             }
@@ -313,6 +327,15 @@ public class BytecodeVM {
                     throw new RuntimeException(
                         "Destructure arity mismatch: expected " + names.size() + " but got " + elems.size());
                 for (int i = 0; i < names.size(); i++) locals.put(names.get(i), elems.get(i));
+            }
+
+            // ── Refinement constraint check ───────────────────────────────────
+            case Instruction.CheckConstraint cc -> {
+                Object value = locals.get(cc.bindingName());
+                boolean ok = runConstraint(cc.constraintCode(), value);
+                if (!ok) throw new RuntimeException(
+                    "Refinement constraint for type '" + cc.typeName() + "' violated" +
+                    " (binding '" + cc.bindingName() + "' = " + format(value) + ")");
             }
 
             // ── Meta ──────────────────────────────────────────────────────────
@@ -378,6 +401,42 @@ public class BytecodeVM {
             }
             case MapVal mv -> mv.entries().put(idx, val);
             default -> throw new RuntimeException("Cannot set index on " + recv);
+        }
+    }
+
+    /** Returns the type name for impl method lookup, or null if not applicable. */
+    private String receiverTypeName(Object v) {
+        return switch (v) {
+            case RecordVal rv -> rv.typeName();
+            case EnumVal   ev -> ev.typeName();
+            case Long      ignored -> "Int";
+            case Double    ignored -> "Float";
+            case Boolean   ignored -> "Bool";
+            case String    ignored -> "Str";
+            default -> null;
+        };
+    }
+
+    /**
+     * Execute a pre-compiled constraint expression with {@code self} bound to {@code value}.
+     * Returns true if the constraint passes (TOS is boolean true after execution).
+     */
+    private boolean runConstraint(List<Instruction> code, Object value) {
+        // Save state
+        Map<String, Object> savedLocals = new HashMap<>(locals);
+        Stack<Object> savedStack = new Stack<>();
+        savedStack.addAll(stack);
+        stack.clear();
+        locals.put("self", value);
+        try {
+            int ip = 0;
+            while (ip < code.size()) ip = execute(code.get(ip), ip, code.size());
+            return stack.isEmpty() ? false : asBool(stack.pop());
+        } finally {
+            stack.clear();
+            stack.addAll(savedStack);
+            locals.clear();
+            locals.putAll(savedLocals);
         }
     }
 

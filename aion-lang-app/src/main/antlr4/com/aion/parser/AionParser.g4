@@ -28,6 +28,8 @@ topDecl
     | enumDecl
     | fnDecl
     | constDecl
+    | traitDecl
+    | implDecl
     ;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -47,6 +49,20 @@ importName
 
 modulePath
     : IDENT (DOT IDENT)*
+    ;
+
+// ── Trait declarations ───────────────────────────────────────────────────────
+traitDecl
+    : TRAIT TYPE_IDENT typeParams? LBRACE traitMember* RBRACE
+    ;
+
+traitMember
+    : annotation* FN IDENT typeParams? LPAREN paramList? RPAREN ARROW returnType (block | SEMI*)
+    ;
+
+// ── Impl blocks ───────────────────────────────────────────────────────────────
+implDecl
+    : IMPL TYPE_IDENT typeParams? FOR TYPE_IDENT typeParams? LBRACE fnDecl* RBRACE
     ;
 
 // ── Type declarations ─────────────────────────────────────────────────────────

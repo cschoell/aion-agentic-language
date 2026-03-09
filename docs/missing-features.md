@@ -5,6 +5,8 @@
 > Updated 2026-03-09 — items 14 (numeric literal forms: hex/binary/octal/digit separators) and 1 (module import system: recursive file loading, transitive imports, cycle detection) implemented.
 > Updated 2026-03-09 — demo scripts enhanced: `math_utils.aion` (shared utility module), `import-demo.aion` (multi-file import + all numeric literal forms), `bytecode-demo.aion` (numeric literals section); 160 passing tests across 6 suites.
 > Updated 2026-03-09 — items 13 (selective imports) and 15 (range expressions: `from..to` / `from..=to`) implemented; 174 passing tests across 6 suites.
+> Updated 2026-03-09 — trait/impl system implemented (interpreter + bytecode, 10 tests); 193 passing tests across 7 suites.
+> Updated 2026-03-09 — refinement type bytecode injection implemented (`CheckConstraint` instruction; 5 new bytecode tests); 198 passing tests across 7 suites.
 > Items 4, 7, 8, 11, 12 were implemented on 2026-03-06; items 15–18 added then.  
 > Code quality pass 2026-03-06 — `BytecodeVM` warnings resolved.  
 > Based on: grammar (`AionParser.g4`, `AionLexer.g4`), interpreter, bytecode VM, and `sample.aion`.
@@ -49,11 +51,13 @@ numbers.filter(fn(x: Int) -> Bool { return x % 2 == 0 })
 
 ---
 
-## 3. Trait / interface system  🔴
+## 3. Trait / interface system  🔴 ✅ done
 
-**What's there:** Records and enums with no shared behaviour contracts.
+**What's there:** Full `trait` / `impl` system — `trait Foo { fn bar(self: Self) -> T }` +
+`impl Foo for MyType { fn bar(self: MyType) -> T { … } }`. Method dispatch works in both
+the interpreter and bytecode VM. 10 tests in `TraitTest`.
 
-**What's missing:** A way to say "any type that implements `Display`":
+**What was missing:** A way to say "any type that implements `Display`":
 
 ```aion
 trait Display {
@@ -319,7 +323,7 @@ Allows porting code from semicolon-terminated languages without reformatting.
 |---|---------|:--------:|:------:|:------:|
 | 1 | Module system + file loading | 🔴 | Large | ✅ basic done |
 | 2 | Closures / lambdas | 🔴 | Medium | ✅ done |
-| 3 | Traits / interfaces | 🔴 | Large | — |
+| 3 | Traits / interfaces | 🔴 | Large | ✅ done |
 | 4 | `?` error propagation | 🟠 | Small | ✅ done |
 | 5 | Generic functions (real) | 🟠 | Large | — |
 | 6 | Deep mutable field assignment | 🟠 | Medium | ✅ done |
@@ -355,7 +359,7 @@ Sorted by effort within each priority tier, prerequisites noted:
 12. ~~**Deep field assignment**~~ ✅ **done** *(medium — unblocks record mutation patterns)*
 13. ~~**Semicolon statement separator**~~ ✅ **done** *(tiny — optional `;` after any stmt in a block)*
 14. ~~**Selective imports**~~ ✅ **done** *(small — `import foo { bar, baz }` syntax)*
-15. **Traits** *(large — prerequisite for generic contracts)*
-16. **Generic functions** *(large — builds on traits)*
-17. **Refinement type bytecode injection** *(medium — emit `CheckConstraint` in the compiler)*
+15. ~~**Traits**~~ ✅ **done** *(trait/impl system; interpreter + bytecode; 10 tests)*
+16. ~~**Refinement type bytecode injection**~~ ✅ **done** *(emit `CheckConstraint` in the compiler; 5 new bytecode tests)*
+17. **Generic functions** *(large — builds on traits)*
 18. **`@async` / concurrency** *(large — needs scheduler, best done last)*

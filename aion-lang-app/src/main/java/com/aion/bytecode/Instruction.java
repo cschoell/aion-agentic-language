@@ -34,6 +34,7 @@ public sealed interface Instruction permits
         Instruction.Throw,
         Instruction.MakeRange,
         Instruction.DestructureRecord, Instruction.DestructureTuple,
+        Instruction.CheckConstraint,
         Instruction.Halt {
 
     // ── Literals ─────────────────────────────────────────────────────────────
@@ -199,4 +200,16 @@ public sealed interface Instruction permits
     record DestructureRecord(java.util.List<String> names) implements Instruction {}
     /** Pop a TupleVal (or ListVal) from TOS; store each element positionally into the named variables. */
     record DestructureTuple(java.util.List<String> names) implements Instruction {}
+
+    // ── Refinement type constraint check ─────────────────────────────────────
+    /**
+     * Peek TOS (the value being stored); execute {@code constraintCode} with
+     * {@code self} bound to that value; if the result is false, throw a runtime
+     * error naming {@code typeName} and {@code bindingName}.
+     */
+    record CheckConstraint(
+            String typeName,
+            String bindingName,
+            java.util.List<Instruction> constraintCode
+    ) implements Instruction {}
 }

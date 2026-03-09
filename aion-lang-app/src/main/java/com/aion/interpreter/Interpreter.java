@@ -43,6 +43,11 @@ public final class Interpreter {
     private final Environment globals;
     /** Refinement constraints keyed by type alias name. null value = no constraint. */
     private final Map<String, Node.Expr> refinements = new HashMap<>();
+    /**
+     * Impl method registry: key = "TypeName::methodName", value = FnDecl.
+     * Populated by loadModule when an ImplDecl is encountered.
+     */
+    private final Map<String, Node.FnDecl> implMethods = new HashMap<>();
 
     public Interpreter() {
         this.globals = Environment.global();
@@ -62,6 +67,10 @@ public final class Interpreter {
                     && td.body() instanceof Node.TypeDeclBody.Alias alias
                     && alias.constraint() != null) {
                 refinements.put(td.name(), alias.constraint());
+            } else if (decl instanceof Node.ImplDecl impl) {
+                for (Node.FnDecl m : impl.methods()) {
+                    implMethods.put(impl.typeName() + "::" + m.name(), m);
+                }
             }
         }
     }
@@ -476,7 +485,37 @@ public final class Interpreter {
         AionValue receiver = evalExpr(e.receiver(), env);
         List<AionValue> argVals = new ArrayList<>();
         for (Arg a : e.args()) argVals.add(resolveArg(a, env));
-        return callMethod(receiver, e.method(), argVals);
+        // Try built-in method dispatch first, then fall back to impl methods
+        try {
+            return callMethod(receiver, e.method(), argVals);
+        } catch (AionRuntimeException ex) {
+            // Look up impl method: receiver type name -> TypeName::methodName
+            String typeName = receiverTypeName(receiver);
+            if (typeName != null) {
+                Node.FnDecl implFn = implMethods.get(typeName + "::" + e.method());
+                if (implFn != null) {
+                    // Pass receiver as first argument (self)
+                    List<AionValue> allArgs = new ArrayList<>();
+                    allArgs.add(receiver);
+                    allArgs.addAll(argVals);
+                    return callFn(new AionValue.FnVal(implFn, globals), allArgs);
+                }
+            }
+            throw ex;
+        }
+    }
+
+    /** Returns the type name string for a value, used for impl method lookup. */
+    private String receiverTypeName(AionValue v) {
+        return switch (v) {
+            case AionValue.RecordVal r -> r.typeName();
+            case AionValue.EnumVal   e -> e.typeName();
+            case AionValue.IntVal    ignored -> "Int";
+            case AionValue.FloatVal  ignored -> "Float";
+            case AionValue.BoolVal   ignored -> "Bool";
+            case AionValue.StrVal    ignored -> "Str";
+            default -> null;
+        };
     }
 
     private AionValue evalPipe(Expr.Pipe e, Environment env) {
@@ -886,7 +925,20 @@ public final class Interpreter {
                 case "second" -> t.elements().get(1);
                 default -> throw new AionRuntimeException("Tuple has no method '" + method + "'");
             };
-            default -> throw new AionRuntimeException("No method '" + method + "' on " + receiver);
+            default -> {
+                // Try impl method lookup for record/enum types
+                String typeName = receiverTypeName(receiver);
+                if (typeName != null) {
+                    Node.FnDecl implFn = implMethods.get(typeName + "::" + method);
+                    if (implFn != null) {
+                        List<AionValue> allArgs = new ArrayList<>();
+                        allArgs.add(receiver);
+                        allArgs.addAll(args);
+                        yield callFn(new AionValue.FnVal(implFn, globals), allArgs);
+                    }
+                }
+                throw new AionRuntimeException("No method '" + method + "' on " + receiver);
+            }
         };
     }
 }

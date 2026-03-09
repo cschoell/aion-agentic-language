@@ -10,6 +10,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Integration tests for the Aion bytecode compiler + VM.
@@ -469,6 +470,58 @@ class BytecodeCompilerTest {
         assertThat(typeDecl.body()).isInstanceOf(com.aion.ast.Node.TypeDeclBody.Alias.class);
         var alias = (com.aion.ast.Node.TypeDeclBody.Alias) typeDecl.body();
         assertThat(alias.constraint()).isNotNull();
+    }
+
+    @Test void bc_refinement_valid_let() {
+        assertThat(run("""
+            type Score = Int where { self >= 0 and self <= 100 }
+            @pure fn main() -> Unit {
+                let s: Score = 42
+                print(s)
+            }
+            """)).isEqualTo("42");
+    }
+
+    @Test void bc_refinement_rejects_invalid_let() {
+        assertThatThrownBy(() -> run("""
+            type Score = Int where { self >= 0 and self <= 100 }
+            @pure fn main() -> Unit {
+                let s: Score = 200
+                print(s)
+            }
+            """)).isInstanceOf(RuntimeException.class)
+              .hasMessageContaining("Score");
+    }
+
+    @Test void bc_refinement_valid_param() {
+        assertThat(run("""
+            type PositiveInt = Int where { self > 0 }
+            @pure fn double(n: PositiveInt) -> Int { return n * 2 }
+            @pure fn main() -> Unit {
+                print(double(5))
+            }
+            """)).isEqualTo("10");
+    }
+
+    @Test void bc_refinement_rejects_invalid_param() {
+        assertThatThrownBy(() -> run("""
+            type PositiveInt = Int where { self > 0 }
+            @pure fn double(n: PositiveInt) -> Int { return n * 2 }
+            @pure fn main() -> Unit {
+                print(double(-3))
+            }
+            """)).isInstanceOf(RuntimeException.class)
+              .hasMessageContaining("PositiveInt");
+    }
+
+    @Test void bc_refinement_str_constraint() {
+        assertThat(run("""
+            type AgentID = Str where { self.starts_with("did:aion:") }
+            @pure fn main() -> Unit {
+                let id: AgentID = "did:aion:abc"
+                print(id)
+            }
+            """)).isEqualTo("did:aion:abc");
     }
 
     // ── Tuple types (feature #9) ──────────────────────────────────────────────

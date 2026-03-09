@@ -62,6 +62,8 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
         if (ctx.typeDecl()   != null)  return (Node) visit(ctx.typeDecl());
         if (ctx.enumDecl()   != null)  return (Node) visit(ctx.enumDecl());
         if (ctx.constDecl()  != null)  return (Node) visit(ctx.constDecl());
+        if (ctx.traitDecl()  != null)  return (Node) visit(ctx.traitDecl());
+        if (ctx.implDecl()   != null)  return (Node) visit(ctx.implDecl());
         return (Node) visit(ctx.fnDecl());
     }
 
@@ -85,6 +87,52 @@ public class AstBuilder extends AionParserBaseVisitor<Object> {
         List<String> names = new ArrayList<>();
         for (var n : ctx.importName()) names.add(n.getText());
         return new ImportDecl(path, alias, names, pos(ctx));
+    }
+
+    // ── Traits & Impls ─────────────────────────────────────────────────────────
+
+    @Override
+    public Node visitTraitDecl(AionParser.TraitDeclContext ctx) {
+        List<String> tp = convertTypeParams(ctx.typeParams());
+        List<Node.FnDecl> members = new ArrayList<>();
+        for (var m : ctx.traitMember()) members.add(convertTraitMember(m));
+        return new Node.TraitDecl(ctx.TYPE_IDENT().getText(), tp, members, pos(ctx));
+    }
+
+    private Node.FnDecl convertTraitMember(AionParser.TraitMemberContext ctx) {
+        List<Node.Annotation> anns = new ArrayList<>();
+        for (var a : ctx.annotation()) anns.add(convertAnnotation(a));
+        List<String> tp = convertTypeParams(ctx.typeParams());
+        List<Node.Param> params = new ArrayList<>();
+        if (ctx.paramList() != null)
+            for (var p : ctx.paramList().param())
+                params.add(new Node.Param(p.IDENT().getText(), convertTypeRef(p.typeRef())));
+        String namedReturn = null;
+        TypeRef ret;
+        var rt = ctx.returnType();
+        if (rt instanceof AionParser.NamedReturnContext nr) {
+            namedReturn = nr.IDENT().getText();
+            ret = convertTypeRef(nr.typeRef());
+        } else {
+            ret = convertTypeRef(((AionParser.PlainReturnContext) rt).typeRef());
+        }
+        // trait members may have no body (abstract signature)
+        Node.Stmt.Block body = ctx.block() != null ? buildBlock(ctx.block()) : new Node.Stmt.Block(List.of(), pos(ctx));
+        return new Node.FnDecl(anns, ctx.IDENT().getText(), tp, params, ret, namedReturn, body, pos(ctx));
+    }
+
+    @Override
+    public Node visitImplDecl(AionParser.ImplDeclContext ctx) {
+        // IMPL TYPE_IDENT typeParams? FOR TYPE_IDENT typeParams? { fnDecl* }
+        var allTypeIdents = ctx.TYPE_IDENT();
+        String traitName = allTypeIdents.get(0).getText();
+        String typeName  = allTypeIdents.get(1).getText();
+        var allTypeParams = ctx.typeParams();
+        List<String> traitTp = allTypeParams.size() > 0 ? convertTypeParams(allTypeParams.get(0)) : List.of();
+        List<String> typeTp  = allTypeParams.size() > 1 ? convertTypeParams(allTypeParams.get(1)) : List.of();
+        List<Node.FnDecl> methods = new ArrayList<>();
+        for (var f : ctx.fnDecl()) methods.add((Node.FnDecl) visit(f));
+        return new Node.ImplDecl(traitName, traitTp, typeName, typeTp, methods, pos(ctx));
     }
 
     // ── Types ─────────────────────────────────────────────────────────────────

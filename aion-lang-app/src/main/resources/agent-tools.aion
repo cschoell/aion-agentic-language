@@ -20,6 +20,10 @@
 //   @on_fail       — structured error hints for agent self-correction
 //   refinement type — Score = Int where { self >= 0 and self <= TOTAL }
 //   lambda         — fn(a: Str) -> Str passed to normalise answers
+//   numeric literals — hex / binary / octal / underscore-separator consts
+//   ranges         — 1..=TOTAL for iteration; exclusive 0..N for indexing
+//   destructuring let — let { attempts, correct } = stats
+//   traits         — Gradable trait with letter_grade() method on QuizStats
 //
 // Tuples and records demonstrate compound data:
 //   (Int, Int)     — quiz_result tuple for score and total
@@ -28,12 +32,31 @@
 const TOTAL: Int = 3
 const BORDER: Str = "+======================================+"
 
+// ── Numeric literal consts ─────────────────────────────────────────────────
+const MAX_SCORE: Int   = 0x03           // 3 — hex literal (quiz total)
+const PASS_BITS: Int   = 0b0000_0010    // bit-flag: score >= 2 passes
+const TIMEOUT_MS: Int  = 1_000          // 1 second in milliseconds
+
 // ── Types ──────────────────────────────────────────────────────────────────
 type QuizStats = { attempts: Int, correct: Int }
 
 // ── Refinement type: Score always in [0, TOTAL] ────────────────────────────
 // The runtime checks this constraint on every assignment.
 type Score = Int where { self >= 0 and self <= 3 }
+
+// ── Trait: anything that can produce a letter grade ───────────────────────
+trait Gradable {
+    fn letter_grade(self: QuizStats) -> Str
+}
+
+impl Gradable for QuizStats {
+    @pure fn letter_grade(self: QuizStats) -> Str {
+        if self.correct == TOTAL { return "A" }
+        if self.correct >= 2     { return "B" }
+        if self.correct >= 1     { return "C" }
+        return "F"
+    }
+}
 
 // ── Arithmetic tool ────────────────────────────────────────────────────────
 @tool
@@ -186,4 +209,28 @@ fn award_point(score: Int, total: Int, correct: Bool) -> (next_score: Int) {
         print("  ${verdict(res.first())}")
         print(BORDER)
     }
+
+    // ── Feature showcase (non-interactive) ────────────────────────────────
+    print("")
+    print("── Feature showcase ──")
+
+    // Numeric literals
+    print("MAX_SCORE=0x03       => ${MAX_SCORE}")
+    print("PASS_BITS=0b0000_0010 => ${PASS_BITS}")
+    print("TIMEOUT_MS=1_000     => ${TIMEOUT_MS}")
+
+    // Range: sum 1..=TOTAL
+    mut q_sum = 0
+    for i in 1..=TOTAL {
+        q_sum = q_sum + i
+    }
+    print("sum(1..=TOTAL) = ${q_sum}")
+
+    // Destructuring let on QuizStats record
+    let { attempts, correct } = stats
+    print("stats: attempts=${attempts}, correct=${correct}")
+
+    // Trait: letter grade via Gradable impl
+    let lg = stats.letter_grade()
+    print("letter_grade = ${lg}")
 }

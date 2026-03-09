@@ -40,6 +40,15 @@ public interface Node {
         record Record(String name, List<FieldDecl> fields)  implements EnumVariant {}
     }
 
+    /** Trait declaration: {@code trait Printable { fn to_str(self: Self) -> Str }} */
+    record TraitDecl(String name, List<String> typeParams,
+                     List<FnDecl> members, Pos pos) implements Node {}
+
+    /** Impl block: {@code impl Printable for Point { fn to_str(...) -> Str { ... } }} */
+    record ImplDecl(String traitName, List<String> traitTypeParams,
+                    String typeName,  List<String> typeTypeParams,
+                    List<FnDecl> methods, Pos pos) implements Node {}
+
     record FnDecl(List<Annotation> annotations,
                   String name,
                   List<String> typeParams,
