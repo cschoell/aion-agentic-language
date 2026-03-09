@@ -49,6 +49,114 @@ class SmallFeaturesTest {
         return interp.callFunction(fn, List.of());
     }
 
+    // ── Semicolon as inline statement separator ───────────────────────────────
+
+    @Test void semicolon_separates_two_stmts_on_one_line() {
+        var out = run("""
+                @pure fn main() -> Unit {
+                    let x = 1; let y = 2
+                    print(x + y)
+                }
+                """);
+        assertThat(out).containsExactly("3");
+    }
+
+    @Test void semicolon_in_if_block() {
+        var out = run("""
+                @pure fn main() -> Unit {
+                    mut done = false
+                    if true { done = true; print("ok") }
+                    print(done)
+                }
+                """);
+        assertThat(out).containsExactly("ok", "true");
+    }
+
+    @Test void trailing_semicolon_ignored() {
+        var out = run("""
+                @pure fn main() -> Unit {
+                    print("a");
+                    print("b");
+                }
+                """);
+        assertThat(out).containsExactly("a", "b");
+    }
+
+    @Test void semicolons_in_while_body() {
+        var out = run("""
+                @pure fn main() -> Unit {
+                    mut i = 0; mut s = 0
+                    while i < 3 { i = i + 1; s = s + i }
+                    print(s)
+                }
+                """);
+        assertThat(out).containsExactly("6");
+    }
+
+    @Test void semicolons_break_continue() {
+        var out = run("""
+                @pure fn main() -> Unit {
+                    mut i = 0
+                    while i < 5 {
+                        i = i + 1
+                        if i == 2 { continue }
+                        if i == 4 { break }
+                        print(i)
+                    }
+                }
+                """);
+        // i=1 printed, i=2 skipped, i=3 printed, i=4 breaks
+        assertThat(out).containsExactly("1", "3");
+    }
+
+    // ── Pipeline operator (>>) ─────────────────────────────────────────────────
+
+
+    @Test void pipeline_interp_in_string_literal() {
+        // The string ">>" should be preserved literally in a non-interpolated string
+        var out = run("""
+            @pure fn main() -> Unit {
+                print("a >> b")
+            }
+            """);
+        assertThat(out).containsExactly("a >> b");
+    }
+
+    @Test void pipeline_interp_in_interpolated_string() {
+        // The string ">>" should be preserved in an interpolated string
+        var out = run("""
+            @pure fn main() -> Unit {
+                let x = 42
+                print("result: ${x} >> done")
+            }
+            """);
+        assertThat(out).containsExactly("result: 42 >> done");
+    }
+
+    @Test void pipeline_pipe_before_hole_in_interpolated_string() {
+        // >> appearing BEFORE the ${} hole — the case in sample.aion
+        var out = run("""
+            @pure fn inc(x: Int) -> Int { return x + 1 }
+            @pure fn main() -> Unit {
+                let r = 3 >> inc
+                print("Pipeline 3 >> inc = ${r}")
+            }
+            """);
+        assertThat(out).containsExactly("Pipeline 3 >> inc = 4");
+    }
+
+    @Test void pipeline_operator_executes() {
+        var out = run("""
+            @pure fn double(x: Int) -> Int { return x * 2 }
+            @pure fn inc(x: Int) -> Int { return x + 1 }
+            @pure fn main() -> Unit {
+                let r = 3 >> double >> inc
+                print(r)
+            }
+            """);
+        assertThat(out).containsExactly("7");
+    }
+
     // ── 1. const declarations ─────────────────────────────────────────────────
 
     @Test void const_int_in_main() {

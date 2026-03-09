@@ -242,8 +242,8 @@ fn award_point(score: Int, correct: Bool) -> (next_score: Int) {
         if n == 4 { even_sum = even_sum + n }
     }
     print("Even sum (2+4, skip 3, stop at 6): ${even_sum}")
-    let piped = 3 |> double_val |> increment
-    print("Pipeline 3 |> double |> inc = ${piped}")
+    let piped = 3 >> double_val >> increment
+    print("Pipeline 3 >> double >> inc = ${piped}")
     print("")
 
     // -- User lookup --

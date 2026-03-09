@@ -122,7 +122,12 @@ class ResourceScriptE2ETest {
             "Fizz",
             "13",
             "14",
-            "FizzBuzz"
+            "FizzBuzz",
+            "range: min=1, max=9",
+            "",
+            "scale_score(8, 10) = 80",
+            "",
+            "Vec2 after set: (1.5, 2.5)"
     );
 
     @Test void hello_interpreter() throws Exception {
@@ -147,7 +152,13 @@ class ResourceScriptE2ETest {
             "Squares: [1, 4, 9, 16, 25]",
             "Evens:   [2, 4]",
             "Tripled: [3, 6, 9, 12, 15]",
-            "safe_div(20, 4) = 5"
+            "safe_div(20, 4) = 5",
+            "split_at([1..6], 3): lo=3, hi=3",
+            "abs_clamp(-7) = 7",
+            "abs_clamp(4)  = 4",
+            "counter 'hits' = 42",
+            "p + q = 7",
+            "sum(1..5) = 15"
     );
 
     @Test void bytecode_demo_interpreter() throws Exception {
@@ -166,13 +177,11 @@ class ResourceScriptE2ETest {
             "3 + 4 = 7",
             "Hello, Aion!",
             "Age 10 is a child",
-            "Age 16 is a teenager",
             "Age 35 is an adult",
-            "Age 70 is a senior",
             "",
             "Circle area:    78.53975",
             "Rectangle area: 24.0",
-            "Favourite color: red",
+            "Colour: red",
             "",
             "10.0 / 3.0 = 3.3333333333333335",
             "Caught: division by zero",
@@ -184,12 +193,17 @@ class ResourceScriptE2ETest {
             "Above 3:   [4, 5]",
             "Tripled:   [3, 6, 9, 12, 15]",
             "",
+            "min = 1, max = 9",
+            "coord len = 2",
+            "",
+            "award_point: 5 + correct = 6, then wrong = 6",
+            "",
+            "point after mutation: x=3.0, y=4.0",
+            "",
             "clamp_score(7, 10) = 7",
             "",
-            "Even sum (2+4, skipping 3, stopping at 6): 6",
-            "Pipeline 3 |> double |> inc = 7",
-            "",
-            "Counted to 3 (limit was 10)",
+            "Even sum (2+4, skip 3, stop at 6): 6",
+            "Pipeline 3 >> double >> inc = 7",
             "",
             "Found Alice, who is a adult",
             "Eve not found"

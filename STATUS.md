@@ -21,7 +21,7 @@
 - [x] `if` / `else if` / `else`
 - [x] `while` and `for … in` loops with `break` and `continue`
 - [x] Exhaustive `match` with wildcards, literals, bind, pattern guards (`x if cond`), `some`/`ok`/`err`, enum tuple/record, nested patterns
-- [x] Pipeline operator `|>`
+- [x] Pipeline operator `>>`
 - [x] `?` propagation operator for `Result`/`Option`
 - [x] Block expressions (last expression is the value)
 - [x] Record literals, list literals, map literals

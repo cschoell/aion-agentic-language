@@ -62,9 +62,9 @@ User { name: "Bob", age: 25 }
 ```
 No positional surprises. AI generates self-documenting call sites.
 
-### 6. Pipeline operator `|>`
+### 6. Pipeline operator `>>`
 ```aion
-let result = 3 |> double |> increment |> str
+let result = 3 >> double >> increment >> str
 ```
 Linear data flow — trivially verifiable left-to-right.
 
@@ -144,7 +144,7 @@ let result: Result[Float, Str] = ok(3.14)
 let val = risky_call()?     // propagate Err/None
 
 // Pipeline
-let out = input |> trim |> parse |> validate
+let out = input >> trim >> parse >> validate
 
 // Lambda expressions (first-class functions)
 let double = fn(x: Int) -> Int { return x * 2 }
@@ -292,7 +292,7 @@ aion-lang/
 | Complex inheritance hierarchies confuse generation | Records + enums only — flat, composable |
 | Non-exhaustive match/switch causes runtime surprises | All `match` expressions must be exhaustive |
 | Implicit type conversions produce wrong types | Zero implicit coercions |
-| Long expression chains are hard to generate correctly | `\|>` pipeline makes data flow linear and verifiable |
+| Long expression chains are hard to generate correctly | `\>>` pipeline makes data flow linear and verifiable |
 | AI agents cannot verify each other's behaviour | `@tool` + registry + arbiter agent — pay-on-success economy |
 
 ---

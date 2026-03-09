@@ -1,7 +1,7 @@
 # Aion — Missing features for larger systems
 
 > Analysis date: 2026-03-06  
-> Last updated: 2026-03-09 — items 2 (closures/lambdas), 17 (@on_fail), 16 (refinement types), 6 (deep field assignment), 9 (tuple types), and 18 (named return variables) implemented.  
+> Last updated: 2026-03-09 — items 2 (closures/lambdas), 17 (@on_fail), 16 (refinement types), 6 (deep field assignment), 9 (tuple types), 18 (named return variables), and 19 (semicolon separator) implemented.  
 > Items 4, 7, 8, 11, 12 were implemented on 2026-03-06; items 15–18 added then.  
 > Code quality pass 2026-03-06 — `BytecodeVM` warnings resolved.  
 > Based on: grammar (`AionParser.g4`, `AionLexer.g4`), interpreter, bytecode VM, and `sample.aion`.
@@ -277,6 +277,40 @@ evaluator to bind the name instead of `result`.
 
 ---
 
+## 19. Semicolon as inline statement separator  🟢 ✅ done
+
+**What's there:** Newline terminates a statement. This means multiple statements must
+occupy separate lines, making tight `if`/`while` bodies verbose.
+
+**What was added:**
+
+```aion
+// Multiple statements on one line:
+let x = 1; let y = 2
+
+// Inline if body (common in while loops and guards):
+if done { count = count + 1; break }
+
+// Trailing semicolons are silently ignored (style tolerance):
+print("hello");
+
+// While body on one line:
+while k <= 5 { acc = acc + k; k = k + 1 }
+```
+
+**Implementation:**
+- **Lexer** (`AionLexer.g4`): added `SEMI : ';' ;` token.
+- **Parser** (`AionParser.g4`): changed `block` rule from `LBRACE stmt* RBRACE`
+  to `LBRACE (stmt SEMI*)* RBRACE` — each statement may be followed by zero or
+  more semicolons. No AST or interpreter/VM changes were needed.
+- **Tests**: 5 interpreter tests in `SmallFeaturesTest`, 4 bytecode tests in
+  `BytecodeCompilerTest`, E2E coverage via `bytecode-demo.aion`.
+
+**Impact:** Eliminates verbosity for compact guards and loop bodies.
+Allows porting code from semicolon-terminated languages without reformatting.
+
+---
+
 ## Summary
 
 | # | Feature | Priority | Effort | Status |
@@ -299,6 +333,7 @@ evaluator to bind the name instead of `result`.
 | 12 | `const` declarations | 🟢 | Small | ✅ done |
 | 13 | Selective imports | 🟢 | Small | — |
 | 14 | Numeric literal forms | 🟢 | Small | — |
+| 19 | Semicolon as inline statement separator | 🟢 | Tiny | ✅ done |
 
 ## Recommended implementation order
 
@@ -316,7 +351,8 @@ Sorted by effort within each priority tier, prerequisites noted:
 10. ~~**Named return variables**~~ ✅ **done** *(small-medium — improves `@ensures` readability)*
 11. ~~**Tuple types**~~ ✅ **done** *(medium — prerequisite for named returns and destructuring)*
 12. ~~**Deep field assignment**~~ ✅ **done** *(medium — unblocks record mutation patterns)*
-13. **Module file loading** *(large — prerequisite for all multi-file programs)*
+13. ~~**Semicolon statement separator**~~ ✅ **done** *(tiny — optional `;` after any stmt in a block)*
+14. **Module file loading** *(large — prerequisite for all multi-file programs)*
 14. **Traits** *(large — prerequisite for generic contracts)*
 15. **Generic functions** *(large — builds on traits)*
 16. **Refinement type bytecode injection** *(medium — emit `CheckConstraint` in the compiler)*

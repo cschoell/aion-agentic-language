@@ -181,7 +181,7 @@ class AionLanguageTest {
         Interpreter i = run("""
             @pure fn double(x: Int) -> Int { return x * 2 }
             @pure fn inc(x: Int)    -> Int { return x + 1 }
-            @pure fn piped()        -> Int { return 3 |> double |> inc }
+            @pure fn piped()        -> Int { return 3 >> double >> inc }
             """);
         var v = i.callFunction("piped", List.of());
         assertThat(((com.aion.interpreter.AionValue.IntVal) v).value()).isEqualTo(7);

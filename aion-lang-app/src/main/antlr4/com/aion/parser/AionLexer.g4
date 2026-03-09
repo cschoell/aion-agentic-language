@@ -72,7 +72,7 @@ T_MAP       : 'Map' ;
 // ── Symbols ───────────────────────────────────────────────────────────────────
 ARROW       : '->' ;
 FAT_ARROW   : '=>' ;
-PIPE        : '|>' ;
+PIPE        : '>>' ;
 COLON       : ':' ;
 DCOLON      : '::' ;
 COMMA       : ',' ;
@@ -100,6 +100,7 @@ RBRACE      : '}' ;
 LBRACKET    : '[' ;
 RBRACKET    : ']' ;
 UNDERSCORE  : '_' ;
+SEMI        : ';' ;    // optional inline statement separator
 
 // ── Literals ──────────────────────────────────────────────────────────────────
 INT_LIT     : '-'? [0-9]+ ;

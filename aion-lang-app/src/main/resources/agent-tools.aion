@@ -121,7 +121,8 @@ fn award_point(score: Int, total: Int, correct: Bool) -> (next_score: Int) {
     while not done {
         print("Q1: What is 10 / 2?")
         let a1 = sanitise(input())
-        if normalise(a1) == "quit" { done = true; break }
+        if normalise(a1) == "quit" { done = true; break
+                }
         let v1 = safe_div(10, 2)
         assert v1 == 5, "safe_div sanity check"
         stats.attempts = stats.attempts + 1
@@ -141,7 +142,10 @@ fn award_point(score: Int, total: Int, correct: Bool) -> (next_score: Int) {
     while not done {
         print("Q2: What is the capital of France?")
         let a2 = sanitise(input())
-        if normalise(a2) == "quit" { done = true; break }
+        if normalise(a2) == "quit" {
+            done = true
+            break
+        }
         stats.attempts = stats.attempts + 1
         if normalise(a2) == "paris" {
             score = award_point(score, TOTAL, true)
@@ -159,7 +163,10 @@ fn award_point(score: Int, total: Int, correct: Bool) -> (next_score: Int) {
     while not done {
         print("Q3: What is 7 * 6?")
         let a3 = sanitise(input())
-        if normalise(a3) == "quit" { done = true; break }
+        if normalise(a3) == "quit" {
+            done = true
+            break
+        }
         stats.attempts = stats.attempts + 1
         if normalise(a3) == "42" {
             score = award_point(score, TOTAL, true)

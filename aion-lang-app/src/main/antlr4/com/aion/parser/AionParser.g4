@@ -1,4 +1,4 @@
-﻿﻿/**
+﻿﻿﻿/**
  * Aion Language — Parser Grammar
  *
  * Every construct starts with a unique leading token so an AI can predict
@@ -109,7 +109,7 @@ annotation
 
 // ── Statements ────────────────────────────────────────────────────────────────
 block
-    : LBRACE stmt* RBRACE
+    : LBRACE (stmt SEMI*)* RBRACE
     ;
 
 stmt

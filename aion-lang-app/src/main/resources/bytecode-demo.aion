@@ -5,7 +5,7 @@
 // Features demonstrated:
 //   const, string interp, break, continue, recursion,
 //   lambda (map/filter), @on_fail, tuples, named return,
-//   deep field assignment
+//   deep field assignment, semicolon statement separator
 
 const GREETING: Str = "Aion bytecode"
 const LIMIT: Int = 4
@@ -121,4 +121,11 @@ fn abs_clamp(n: Int) -> (clamped: Int) {
     mut ctr = Counter { label: "hits", value: 0 }
     ctr.value = 42
     print("counter '${ctr.label}' = ${ctr.value}")
+
+    // -- semicolon as inline statement separator --
+    let p = 3; let q = 4
+    print("p + q = ${p + q}")
+    mut acc = 0; mut k = 1
+    while k <= 5 { acc = acc + k; k = k + 1 }
+    print("sum(1..5) = ${acc}")
 }

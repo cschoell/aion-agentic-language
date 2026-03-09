@@ -13,7 +13,7 @@ Versioning follows **date-based** releases while the project is pre-1.0.
 - Type system: built-in primitives (`Int`, `Float`, `Bool`, `Str`, `Unit`), generic containers (`Option[T]`, `Result[T,E]`, `List[T]`, `Map[K,V]`), record types, enum (sum) types, type aliases, function types.
 - Named arguments at all call sites; positional args also supported.
 - Pattern matching (`match`) — exhaustive by design; wildcards, literals, bind patterns, `some`/`ok`/`err` patterns, enum tuple/record patterns, nested patterns.
-- Pipeline operator `|>` for linear data flow.
+- Pipeline operator `>>` for linear data flow.
 - `?` propagation operator — short-circuits `Err`/`None` up the call stack.
 - Block expressions (last expression is the value).
 - Loops: `for … in`, `while`.
@@ -37,7 +37,7 @@ Versioning follows **date-based** releases while the project is pre-1.0.
 - `Environment` — lexical scope chain with `define`, `assign`, `lookup`.
 - `Interpreter` — tree-walking interpreter:
   - All statement forms (`let`, `mut`, assign, `return`, `if`/`else if`/`else`, `while`, `for … in`, block).
-  - All expression forms including `match`, block-expr, `|>`, `?`, list/map literals, record literals, enum variant references.
+  - All expression forms including `match`, block-expr, `>>`, `?`, list/map literals, record literals, enum variant references.
   - Method calls on `List`, `Map`, `Str` (`.push`, `.pop`, `.get`, `.len`, `.contains`, `.map`, `.filter`, `.keys`, `.values`, `.upper`, `.lower`, `.trim`, `.split`, `.starts_with`, `.ends_with`).
   - Built-in functions: `print`, `str`, `int`, `float`, `len`, `assert`, `is_some`, `is_none`, `is_ok`, `is_err`, `unwrap`, `unwrap_or`.
   - Control flow via `ReturnSignal` / `PropagateSignal` exceptions.

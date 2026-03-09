@@ -302,7 +302,7 @@ class BytecodeCompilerTest {
         assertThat(run("""
             @pure fn double(x: Int) -> Int { return x * 2 }
             @pure fn inc(x: Int)    -> Int { return x + 1 }
-            @pure fn main() -> Unit { print(3 |> double |> inc) }
+            @pure fn main() -> Unit { print(3 >> double >> inc) }
             """)).isEqualTo("7");
     }
 
@@ -572,5 +572,45 @@ class BytecodeCompilerTest {
                 print(p.addr.city)
             }
             """)).isEqualTo("Munich");
+    }
+
+    // ── Semicolon as inline statement separator ───────────────────────────────
+
+    @Test void bc_semicolon_two_lets_one_line() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                let x = 10; let y = 20
+                print(x + y)
+            }
+            """)).isEqualTo("30");
+    }
+
+    @Test void bc_semicolon_in_if_block() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                mut flag = false
+                if true { flag = true; print("set") }
+                print(flag)
+            }
+            """)).isEqualTo("set\ntrue");
+    }
+
+    @Test void bc_trailing_semicolon_ignored() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                print("x");
+                print("y");
+            }
+            """)).isEqualTo("x\ny");
+    }
+
+    @Test void bc_semicolon_while_body() {
+        assertThat(run("""
+            @pure fn main() -> Unit {
+                mut i = 0; mut acc = 0
+                while i < 4 { i = i + 1; acc = acc + i }
+                print(acc)
+            }
+            """)).isEqualTo("10");
     }
 }
